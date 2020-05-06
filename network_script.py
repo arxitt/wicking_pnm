@@ -17,6 +17,7 @@ import networkx as nx
 
 net_stat_path = r"W:\Robert_TOMCAT_3_netcdf4_archives\processed_1200_dry_seg_aniso_sep\network_statistics.nc"
 exp_data_path = r"W:\Robert_TOMCAT_3_netcdf4_archives\processed_1200_dry_seg_aniso_sep\dyn_data_T3_025_3_III.nc"
+pore_data_path = r"W:\Robert_TOMCAT_3_netcdf4_archives\processed_1200_dry_seg_aniso_sep\pore_props_T3_025_3_III.nc"
 
 #  define some general physical constants
 eta = 1 #mPa*s dynamic viscosity of water
@@ -62,11 +63,13 @@ labels = data['label'].data
 # it just does not fit into the script yet
 throats, params = robpylib.CommonFunctions.pore_network.extract_throat_list(label_matrix, labels)
 
-# onley these 4 lines depend on the previous unsecure function
+# onley these 2 lines depend on the previous unsecure function
 expnet = nx.Graph()
 expnet.add_edges_from(np.uint16(throats[:,:2]))
-re = np.sqrt(throats[:,8]/np.pi)*px
-h0e = throats[:,-3]*px
+
+pore_data = xr.load_dataset(pore_data_path)
+re = np.sqrt(pore_data['value_properties'].sel(property = 'major_axis').data/np.pi)*px
+h0e = pore_data['value_properties'].sel(property = 'median_area').data*px
 
 
 # function to calculate the resistance of a full pore
