@@ -8,6 +8,8 @@ Created on Wed May  6 08:19:34 2020
 
 import xarray as xr
 import numpy as np
+import scipy as sp
+import scipy.sparse
 # import os
 from statsmodels.distributions.empirical_distribution import ECDF
 from scipy.interpolate import interp1d
@@ -59,13 +61,22 @@ data = xr.load_dataset(exp_data_path)
 label_matrix = data['label_matrix'].data
 labels = data['label'].data
 
-# I don't trust this function, I have a better version (adjacency_matrix)
-# it just does not fit into the script yet
-throats, params = robpylib.CommonFunctions.pore_network.extract_throat_list(label_matrix, labels)
+adj_mat = robpylib.CommonFunctions.pore_network.adjacency_matrix(label_matrix)
+# remove diagonal entries (self-loops)
+adj_mat[np.where(np.diag(np.ones(adj_mat.shape[0], dtype=np.bool)))] = False
 
-# onley these 2 lines depend on the previous unsecure function
+# remove irrelevant/noisy labels, pores that are just a few pixels large
+mask = np.ones(adj_mat.shape[0], np.bool)
+mask[labels] = False
+adj_mat[mask,:] = False
+adj_mat[:,mask] = False
+
+# construct networkx graph object, not necessary but allows the use of random graphs in the simulation function
+adj_sparse = sp.sparse.coo_matrix(adj_mat)
+conn_list = zip(adj_sparse.row, adj_sparse.col)
 expnet = nx.Graph()
-expnet.add_edges_from(np.uint16(throats[:,:2]))
+expnet.add_edges_from(conn_list)
+
 
 pore_data = xr.load_dataset(pore_data_path)
 re = np.sqrt(pore_data['value_properties'].sel(property = 'major_axis').data/np.pi)*px
