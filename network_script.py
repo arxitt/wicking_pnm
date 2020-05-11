@@ -77,10 +77,10 @@ conn_list = zip(adj_sparse.row, adj_sparse.col)
 expnet = nx.Graph()
 expnet.add_edges_from(conn_list)
 
-
+# load pore properties
 pore_data = xr.load_dataset(pore_data_path)
-re = np.sqrt(pore_data['value_properties'].sel(property = 'major_axis').data/np.pi)*px
-h0e = pore_data['value_properties'].sel(property = 'median_area').data*px
+re = np.sqrt(pore_data['value_properties'].sel(property = 'median_area').data/np.pi)*px
+h0e = pore_data['value_properties'].sel(property = 'major_axis').data*px
 
 
 # function to calculate the resistance of a full pore
