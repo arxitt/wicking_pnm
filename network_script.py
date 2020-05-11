@@ -30,7 +30,7 @@ px = 2.75E-6 #m
 
 # pass some empirical information
 inlets = [162, 171, 207]
-R_inlet = 5E17 #Pas/m3
+R_inlet = 5E19 #Pas/m3
 
 # intialize simulation boundaries
 t_init = 1E-4 #s start time to stabilze simulation and avoid inertial regime, now irrelavent because flow rate is solved iteratively
@@ -286,7 +286,9 @@ plt.xlabel('time [s]')
 plt.ylabel('flux [m3/s]')
 plt.ylim(0, Qmax)
 
+
 ## compare to experimental data
+plt.figure()
 vxm3 = px**3
 test = np.array(results)
 std = test[:,1,:].std(axis=0)
