@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 Created on Wed May  6 08:19:34 2020
@@ -13,33 +14,24 @@ import scipy.sparse
 # import os
 from statsmodels.distributions.empirical_distribution import ECDF
 from scipy.interpolate import interp1d
+from joblib import Parallel, delayed
+from skimage.morphology import cube
 import matplotlib.pyplot as plt
-import robpylib
 import networkx as nx
+import multiprocessing as mp
 
-net_stat_path = r"W:\Robert_TOMCAT_3_netcdf4_archives\processed_1200_dry_seg_aniso_sep\network_statistics.nc"
-exp_data_path = r"W:\Robert_TOMCAT_3_netcdf4_archives\processed_1200_dry_seg_aniso_sep\dyn_data_T3_025_3_III.nc"
-pore_data_path = r"W:\Robert_TOMCAT_3_netcdf4_archives\processed_1200_dry_seg_aniso_sep\pore_props_T3_025_3_III.nc"
+net_stat_path = r'data/network_statistics.nc'
+exp_data_path = r'data/dyn_data_T3_025_3_III.nc'
+pore_data_path = r'data/pore_props_T3_025_3_III.nc'
 
-#  define some general physical constants
+## define some general physical constants
 eta = 1 #mPa*s dynamic viscosity of water
 gamma = 72.6 #mN/m surface tension of water
 theta = 50 #° contact angle
 cos = np.cos(theta/180*np.pi)
 px = 2.75E-6 #m
 
-# pass some empirical information
-inlets = [162, 171, 207]
-R_inlet = 5E19 #Pas/m3
-
-# intialize simulation boundaries
-t_init = 1E-4 #s start time to stabilze simulation and avoid inertial regime, now irrelavent because flow rate is solved iteratively
-tmax = 1600 #s
-dt = 1E-4#s
-
-
-
-#  load waiting time statistics
+## load waiting time statistics
 delta_t_025 = np.array([])
 delta_t_100 = np.array([])
 delta_t_300 = np.array([])
@@ -55,58 +47,25 @@ for key in list(network_statistics.coords):
         delta_t_300 = np.concatenate([delta_t_300, network_statistics[key].data])
 delta_t_all = network_statistics['deltatall'].data
 
+## function to calculate the resistance of a full pore
+poiseuille_resistance = lambda l, r, eta=eta: \
+    8*eta*l/np.pi/r**4
 
-# extract the network
-data = xr.load_dataset(exp_data_path)
-label_matrix = data['label_matrix'].data
-labels = data['label'].data
+## function to calculate the filling velocity considering the inlet resistance and tube radius
+capillary_rise = lambda t, r, R0, cos = cos, gamma = gamma, eta = eta: \
+    gamma*r*cos/2/eta/np.sqrt((R0*np.pi*r**4/8/eta)**2+gamma*r*cos*t/2/eta)
 
-adj_mat = robpylib.CommonFunctions.pore_network.adjacency_matrix(label_matrix)
-# remove diagonal entries (self-loops)
-adj_mat[np.where(np.diag(np.ones(adj_mat.shape[0], dtype=np.bool)))] = False
+## use capillary_rise2 because the former did not consider that R0 can change over time, should be irrelevant because pore contribution becomes quickly irrelevant , but still...
+capillary_rise2 = lambda r, R0, h, cos = cos, gamma = gamma, eta = eta: \
+    2*gamma*cos/(R0*np.pi*r**3+8*eta*h/r)
 
-# remove irrelevant/noisy labels, pores that are just a few pixels large
-mask = np.ones(adj_mat.shape[0], np.bool)
-mask[labels] = False
-adj_mat[mask,:] = False
-adj_mat[:,mask] = False
+## wrap up pore filling states to get total amount of water in the network
+total_volume = lambda h, r: \
+    (h*np.pi*r**2).sum()
 
-# construct networkx graph object, not necessary but allows the use of random graphs in the simulation function
-adj_sparse = sp.sparse.coo_matrix(adj_mat)
-conn_list = zip(adj_sparse.row, adj_sparse.col)
-expnet = nx.Graph()
-expnet.add_edges_from(conn_list)
-
-# load pore properties
-pore_data = xr.load_dataset(pore_data_path)
-re = np.sqrt(pore_data['value_properties'].sel(property = 'median_area').data/np.pi)*px
-h0e = pore_data['value_properties'].sel(property = 'major_axis').data*px
-
-
-# function to calculate the resistance of a full pore
-def poiseuille_resistance(l, r, eta=eta):
-    R = 8*eta*l/np.pi/r**4
-    return R
-
-# function to calculate the filling velocity considering the inlet resistance and tube radius
-def capillary_rise(t, r, R0, cos = cos, gamma = gamma, eta =eta):
-    dhdt = gamma*r*cos/2/eta/np.sqrt((R0*np.pi*r**4/8/eta)**2+gamma*r*cos*t/2/eta)
-    return dhdt
-
-# use capillary_rise2 because the former did not consider that R0 can change over time, should be irrelevant because pore contribution becomes quickly irrelevant , but still...
-def capillary_rise2(r, R0, h, cos = cos, gamma = gamma, eta = eta):
-    dhdt = 2*gamma*cos/(R0*np.pi*r**3+8*eta*h/r)
-    return dhdt
-
-#  wrap up pore filling states to get total amount of water in the network
-def total_volume(h, r):
-    V = (h*np.pi*r**2).sum()
-    return V
-
-#  simple
-def effective_resistance(R_nb):
-    R = 1/(1/R_nb).sum()
-    return R
+##  simple
+effective_resistance = lambda R_nb: \
+    1/(1/R_nb).sum()
 
 """
 find your path through the filled network to calculate the inlet
@@ -152,7 +111,7 @@ def outlet_resistances(inlets, filled, R_full, net):
                 current_layer.remove(nd)
     return R0
 
-def simulation3(net = expnet, t_init=t_init, tmax=tmax, dt=dt, R_inlet=R_inlet, re = re, h0e = h0e, t_wait_seq = False, inlets = False):
+def simulation3(net, t_init, tmax, dt, R_inlet, re, h0e, t_wait_seq = False, inlets = False):
    
     # this part is necessary to match the network pore labels to the pore property arrays
     n = len(net.nodes)  
@@ -247,19 +206,84 @@ def simulation3(net = expnet, t_init=t_init, tmax=tmax, dt=dt, R_inlet=R_inlet, 
                 
         V[tt] = total_volume(h[node_ids], r[node_ids])
         tt=tt+1
-    return(time, V)
+    return [time, V]
 
+def adjacency_matrix(label_im):
+    def neighbour_search(label, im, struct=cube):
+        mask = im==label
+        mask = scipy.ndimage.binary_dilation(input = mask, structure = struct(3))
+        neighbours = np.unique(im[mask])[1:]
+        return neighbours
 
-# run the simulation 20 times in parallel
-# results = Parallel(n_jobs = mp.cpu_count())(delayed(simulation3)(net=expnet, inlets = inlets, t_init=t_init, tmax=tmax, dt=dt, t_wait_seq = tseq, R_inlet=R_inlet) for i in range(20))
+    size = len(label_im)
+    labels = np.unique(label_im)[1:]
+    adj_mat = np.zeros([size,size], dtype=np.bool)
 
-# or just once
+    num_cores = mp.cpu_count()
+    results = Parallel(n_jobs=num_cores)(delayed(neighbour_search)(label, label_im) for label in labels)
+
+    for (label, result) in zip(labels, results):
+        adj_mat[label, result] = True
+
+    # make sure that matrix is symmetric (as it should be)
+    adj_mat = np.maximum(adj_mat, adj_mat.transpose())
+
+    return adj_mat
+
+def simulation_parameters(data):
+    label_matrix = data['label_matrix'].data
+    labels = data['label'].data
+
+    ## intialize simulation boundaries
+    t_init = 1E-4 #s start time to stabilze simulation and avoid inertial regime, now irrelavent because flow rate is solved iteratively
+    tmax = 1600 #s
+    dt = 1E-4#s
+
+    adj_mat = adjacency_matrix(label_matrix)
+    # remove diagonal entries (self-loops)
+    adj_mat[np.where(np.diag(np.ones(adj_mat.shape[0], dtype=np.bool)))] = False
+
+    # remove irrelevant/noisy labels, pores that are just a few pixels large
+    mask = np.ones(adj_mat.shape[0], np.bool)
+    mask[labels] = False
+    adj_mat[mask,:] = False
+    adj_mat[:,mask] = False
+
+    # construct networkx graph object, not necessary but allows the use of random graphs in the simulation function
+    adj_sparse = sp.sparse.coo_matrix(adj_mat)
+    conn_list = zip(adj_sparse.row, adj_sparse.col)
+    expnet = nx.Graph()
+    expnet.add_edges_from(conn_list)
+
+    # load pore properties
+    pore_data = xr.load_dataset(pore_data_path)
+    re = np.sqrt(pore_data['value_properties'].sel(property = 'median_area').data/np.pi)*px
+    h0e = pore_data['value_properties'].sel(property = 'major_axis').data*px
+
+    return (expnet, t_init, tmax, dt, re, h0e)
+
+#### Get simulation results
+
+data = xr.load_dataset(exp_data_path)
 results = []
-result = simulation3(net=expnet, inlets = inlets, t_init=t_init, tmax=tmax, dt=dt, t_wait_seq = delta_t_025, R_inlet=R_inlet)
+## TODO: Push these parameters in a dictionary
+net, t_init, tmax, dt, re, h0e = simulation_parameters(data)
+R_inlet = 5E19 #Pas/m3
+t_wait_seq = delta_t_025
+inlets = [162, 171, 207]
+
+### run the simulation 20 times in parallel
+## Warning: This code is untested.
+# results = Parallel(n_jobs = mp.cpu_count())( \
+#     delayed(simulation3)(net, t_init, tmax, dt, R_inlet, re, h0e, t_wait_seq, inlets) \
+#         for i in range(20) \
+# )
+
+### or just once
+result = simulation3(net, t_init, tmax, dt, R_inlet, re, h0e, t_wait_seq, inlets)
 results.append(result)
 
-
-#  and plot
+### and plot
 for result in results:
     plt.loglog(result[0], result[1])   
 plt.title('experimental network')
@@ -286,19 +310,25 @@ plt.xlabel('time [s]')
 plt.ylabel('flux [m3/s]')
 plt.ylim(0, Qmax)
 
-
 ## compare to experimental data
 plt.figure()
 vxm3 = px**3
 test = np.array(results)
 std = test[:,1,:].std(axis=0)
-mean =test[:,1,:].mean(axis=0)
+mean = test[:,1,:].mean(axis=0)
 time_line = test[0,0,:]
 
+## Configure the axes
 time_coarse = time_line[::1000]
 mean_coarse = mean[::1000]
 std_coarse = std[::1000]
 
+## Configure the plot
 plt.plot(time_coarse, mean_coarse)#)
 plt.fill_between(time_coarse, mean_coarse-std_coarse, mean_coarse+std_coarse, alpha=0.2)
+
+## Create data and plot it
 (data['volume'].sum(axis = 0)*vxm3).plot(color='k')
+
+## Show the plot
+plt.show()
