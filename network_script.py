@@ -21,7 +21,7 @@ import networkx as nx
 import multiprocessing as mp
 
 # TODO: Replace the below with command line arguments
-jobs_count = 16
+job_count = 16
 net_stat_path = r'data/network_statistics.nc'
 exp_data_path = r'data/dyn_data_T3_025_3_III.nc'
 pore_data_path = r'data/pore_props_T3_025_3_III.nc'
@@ -146,7 +146,7 @@ class WickingPNM:
         labels = np.unique(label_im[1:])
         matrix = np.zeros([size,size], dtype=np.bool)
 
-        results = Parallel(n_jobs=jobs_count)(delayed(neighbour_search)(label, label_im) for label in labels)
+        results = Parallel(n_jobs=job_count)(delayed(neighbour_search)(label, label_im) for label in labels)
 
         for (label, result) in zip(labels, results):
             matrix[label, result] = True
@@ -358,9 +358,12 @@ if __name__ == '__main__':
     parallel_run = True
     n = 32
     if parallel_run:
-        print('Starting the simulation for {} times with {} jobs.'.format(n, jobs_count))
-        with mp.Pool(jobs_count) as pool:
-            results = pool.map(simulation3, np.full(n, pnm))
+        print('Starting the simulation for {} times with {} jobs.'.format(n, job_count))
+        with mp.Pool(job_count) as pool:
+            pnm_arg = np.full(n, pnm)
+            t_wait_seq_arg = [t_wait_seq for i in range(n)]
+            inlets_arg = [inlets for i in range(n)]
+            results = pool.starmap(simulation3, zip(pnm_arg, t_wait_seq_arg, inlets_arg))
     else:
         print('Starting the simulation to run once.')
         results = [simulation3(pnm, t_wait_seq, inlets)]
