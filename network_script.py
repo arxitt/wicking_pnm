@@ -6,25 +6,26 @@ Created on Wed May  6 08:19:34 2020
 @author: firo
 """
 
-# import os
-# TODO: import sys, getopt
+import sys
+import argparse
 
 import xarray as xr
 import numpy as np
 import scipy as sp
-from statsmodels.distributions.empirical_distribution import ECDF
-from scipy.interpolate import interp1d
-from joblib import Parallel, delayed
-from skimage.morphology import cube
 import matplotlib.pyplot as plt
 import networkx as nx
 import multiprocessing as mp
 
-# TODO: Replace the below with command line arguments
-job_count = 16
-net_stat_path = r'data/network_statistics.nc'
+from statsmodels.distributions.empirical_distribution import ECDF
+from scipy.interpolate import interp1d
+from joblib import Parallel, delayed
+from skimage.morphology import cube
+
+stats_path = r'data/network_statistics.nc'
 exp_data_path = r'data/dyn_data_T3_025_3_III.nc'
 pore_data_path = r'data/pore_props_T3_025_3_III.nc'
+
+job_count = 4 # Default job count, 4 should be fine on most systems
 
 ## define some general physical constants
 eta = 1 #mPa*s dynamic viscosity of water
@@ -55,13 +56,14 @@ effective_resistance = lambda R_nb: \
 
 class WickingPNMStats:
     def __init__(self, path):
-        print('Reading the statistics dataset at {}'.format(path))
-        stats_dataset = xr.load_dataset(path)
-
-        ## waiting time statistics
+        # waiting time statistics
         self.delta_t_025 = np.array([])
         self.delta_t_100 = np.array([])
         self.delta_t_300 = np.array([])
+        self.delta_t_all = np.array([])
+
+        print('Reading the statistics dataset at {}'.format(path))
+        stats_dataset = xr.load_dataset(path)
 
         for key in list(stats_dataset.coords):
             if not key[-2:] == '_t': continue
@@ -75,9 +77,10 @@ class WickingPNMStats:
         self.delta_t_all = stats_dataset['deltatall'].data
 
 class WickingPNM:
-    def __init__(self, net_stat_path = None, exp_data_path = None, pore_data_path = None):
+    def __init__(self, generate, exp_data_path = None, pore_data_path = None, stats_path = None):
         self.data = None
         self.graph = None
+        self.waiting_times = np.array([])
         self.params = {
             ## intialize simulation boundaries
             # t_init is now irrelevent because flow rate is solved iteratively
@@ -91,26 +94,26 @@ class WickingPNM:
             'h0e': 0,
         }
 
-        if net_stat_path is not None:
-            self.stats = WickingPNMStats(net_stat_path)
-
-        if exp_data_path is not None and pore_data_path is not None:
+        if not generate:
             print('Generating the network from data')
-            self.from_data(exp_data_path, pore_data_path)
+            stats = WickingPNMStats(stats_path)
+            self.from_data(exp_data_path, pore_data_path, stats)
             return
 
         print('Generating an artificial network (UNIMPLEMENTED)');
-        self.generate_artificial_network()
+        # TODO: Get the graph generator and its arguments from the constructor's arguments
+        self.generate_artificial_pnm(nx.watts_strogatz_graph)
 
-    def generate_artificial_network(self, function):
+    def generate_artificial_pnm(self, function):
         # TODO: Generate a graph in self.graph using function
         return
 
-    def from_data(self, exp_data_path, pore_data_path):
+    def from_data(self, exp_data_path, pore_data_path, stats):
         print('Reading the experimental dataset at {}'.format(exp_data_path))
         dataset = xr.load_dataset(exp_data_path)
         label_matrix = dataset['label_matrix'].data
         labels = dataset['label'].data
+        self.data = dataset
 
         print('Getting adjacency matrix for the experimental dataset')
         matrix = self.adjacency_matrix(label_matrix)
@@ -135,18 +138,21 @@ class WickingPNM:
         self.params['re'] = px*np.sqrt(pore['value_properties'].sel(property = 'median_area').data/np.pi)
         self.params['h0e'] = px*pore['value_properties'].sel(property = 'major_axis').data
 
+        # define waiting times
+        self.waiting_times = stats.delta_t_025
+
     def adjacency_matrix(self, label_im):
-        def neighbour_search(label, im, struct=cube):
-            mask = im==label
+        def neighbour_search(label, struct=cube):
+            mask = label_im==label
             mask = sp.ndimage.binary_dilation(input = mask, structure = struct(3))
-            neighbours = np.unique(im[mask])[1:]
+            neighbours = np.unique(label_im[mask])[1:]
             return neighbours
 
         size = len(label_im)
         labels = np.unique(label_im[1:])
         matrix = np.zeros([size,size], dtype=np.bool)
 
-        results = Parallel(n_jobs=job_count)(delayed(neighbour_search)(label, label_im) for label in labels)
+        results = Parallel(n_jobs=job_count)(delayed(neighbour_search)(label) for label in labels)
 
         for (label, result) in zip(labels, results):
             matrix[label, result] = True
@@ -199,7 +205,7 @@ def outlet_resistances(inlets, filled, R_full, net):
                 current_layer.remove(nd)
     return R0
 
-def simulation3(pnm, t_wait_seq = False, inlets = False):
+def simulation3(pnm, inlets = False):
     # this part is necessary to match the network pore labels to the pore property arrays
     nodes = pnm.graph.nodes
     n = len(nodes)  
@@ -224,8 +230,8 @@ def simulation3(pnm, t_wait_seq = False, inlets = False):
 
 
     # asign a random waiting time to every pore based on the experimental distribution
-    if np.any(t_wait_seq):       
-        ecdf = ECDF(t_wait_seq)
+    if np.any(pnm.waiting_times):       
+        ecdf = ECDF(pnm.waiting_times)
         f = interp1d(ecdf.y[1:], ecdf.x[1:], fill_value = 'extrapolate')
         prob = np.random.rand(n_init)
         t_w = f(prob)     
@@ -251,12 +257,11 @@ def simulation3(pnm, t_wait_seq = False, inlets = False):
     R0[inlets] = pnm.params['R_inlet']
     V=np.zeros(len(time))
     R_full = poiseuille_resistance(h0, r) +R0
-    
-    
+
     # this is the simulation:
     active = inlets
     new_active = []
-    
+
     # every time step solve explicitly
     tt=0
     for t in time:
@@ -342,30 +347,51 @@ def plot_results(pnm, results):
     plt.fill_between(time_coarse, mean_coarse-std_coarse, mean_coarse+std_coarse, alpha=0.2)
 
     # Create data and plot it
-    (data['volume'].sum(axis = 0)*vxm3).plot(color='k')
+    (pnm.data['volume'].sum(axis = 0)*vxm3).plot(color='k')
 
     # Show the plot
     plt.show()
 
 if __name__ == '__main__':
-    #### Get simulation results
+    ### Parse arguments
+    parser = argparse.ArgumentParser(description = 'Simulation parameters')
+    parser.add_argument('-G', action = 'store_true', help = 'Generate an artificial pore network model and ignore -E, -P and -S')
+    parser.add_argument('-n', type = int, default = 1, help = 'The amount of times to run the simulation (default to 1)')
+    parser.add_argument('-j', type = int, default = job_count, help = 'The amount of jobs to use (default to {})'.format(job_count))
+    parser.add_argument('-E', '--exp-data', default = None, help = 'Path to the experimental data')
+    parser.add_argument('-P', '--pore-data', default = None, help = 'Path to the pore network data')
+    parser.add_argument('-S', '--stats-data', default = None, help = 'Path to the network statistics')
+
+    args = parser.parse_args()
+    if not args.G and not all([args.exp_data, args.pore_data, args.stats_data]):
+        raise ValueError('Either -G has to be used, or all of the data paths have to be defined.')
+    if args.n < 0:
+        raise ValueError('-n has to be greater or equal to 0.')
+    if args.j <= 0:
+        raise ValueError('-j has to be greater or equal to 1.')
+
+    job_count = args.j # This is a global variable that remains constant from here
+    n = args.n
+
+    ### Initialize the PNM
     results = []
-    pnm = WickingPNM(net_stat_path, exp_data_path, pore_data_path)
+    pnm = WickingPNM(args.G, args.exp_data, args.pore_data, args.stats_data)
     pnm.params['R_inlet'] = 5E19 #Pas/m3
-    t_wait_seq = pnm.stats.delta_t_025
     inlets = [162, 171, 207]
 
-    parallel_run = True
-    n = 32
-    if parallel_run:
-        print('Starting the simulation for {} times with {} jobs.'.format(n, job_count))
-        with mp.Pool(job_count) as pool:
-            pnm_arg = np.full(n, pnm)
-            t_wait_seq_arg = [t_wait_seq for i in range(n)]
-            inlets_arg = [inlets for i in range(n)]
-            results = pool.starmap(simulation3, zip(pnm_arg, t_wait_seq_arg, inlets_arg))
-    else:
+    ### Get simulation results
+    if n == 0:
+        # We just wanted to build the network
+        sys.exit()
+    if n == 1:
         print('Starting the simulation to run once.')
-        results = [simulation3(pnm, t_wait_seq, inlets)]
+        results = [simulation3(pnm, inlets)]
+    else:
+        njobs = min(n, job_count)
+        print('Starting the simulation for {} times with {} jobs.'.format(n, njobs))
+        with mp.Pool(njobs) as pool:
+            pnm_arg = np.full(n, pnm)
+            inlets_arg = [inlets for i in range(n)]
+            results = pool.starmap(simulation3, zip(pnm_arg, inlets_arg))
 
     plot_results(pnm, results)
