@@ -92,6 +92,7 @@ class WickingPNM:
             'R_inlet': 0,
             're': 0,
             'h0e': 0,
+            'inlets': False,
         }
 
         if not generate:
@@ -205,7 +206,7 @@ def outlet_resistances(inlets, filled, R_full, net):
                 current_layer.remove(nd)
     return R0
 
-def simulation3(pnm, inlets = False):
+def simulation(pnm):
     # this part is necessary to match the network pore labels to the pore property arrays
     nodes = pnm.graph.nodes
     n = len(nodes)  
@@ -216,6 +217,7 @@ def simulation3(pnm, inlets = False):
     
     
     num_inlets = max(int(0.1*n),6)
+    inlets = pnm.params['inlets']
     if not np.any(inlets):
         inlets = np.random.choice(nodes, num_inlets)
         inlets = list(np.unique(inlets))
@@ -377,7 +379,7 @@ if __name__ == '__main__':
     results = []
     pnm = WickingPNM(args.G, args.exp_data, args.pore_data, args.stats_data)
     pnm.params['R_inlet'] = 5E19 #Pas/m3
-    inlets = [162, 171, 207]
+    pnm.params['inlets'] = [162, 171, 207]
 
     ### Get simulation results
     if n == 0:
@@ -385,13 +387,11 @@ if __name__ == '__main__':
         sys.exit()
     if n == 1:
         print('Starting the simulation to run once.')
-        results = [simulation3(pnm, inlets)]
+        results = [simulation(pnm)]
     else:
         njobs = min(n, job_count)
         print('Starting the simulation for {} times with {} jobs.'.format(n, njobs))
         with mp.Pool(njobs) as pool:
-            pnm_arg = np.full(n, pnm)
-            inlets_arg = [inlets for i in range(n)]
-            results = pool.starmap(simulation3, zip(pnm_arg, inlets_arg))
+            results = pool.map(simulation, np.full(n, pnm))
 
     plot_results(pnm, results)
