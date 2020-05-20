@@ -20,6 +20,7 @@ from statsmodels.distributions.empirical_distribution import ECDF
 from scipy.interpolate import interp1d
 from joblib import Parallel, delayed
 from skimage.morphology import cube
+from collections import deque
 
 stats_path = r'data/network_statistics.nc'
 exp_data_path = r'data/dyn_data_T3_025_3_III.nc'
@@ -175,52 +176,68 @@ def outlet_resistances(inlets, filled, R_full, net):
     # initialize "to-do list", only filled pores contribute to the network permeability
     to_visit = np.zeros(len(filled), dtype=np.bool)
     to_visit[np.where(filled)] = True
-    
+    to_remove = deque()
+
     #  check if inlet pores are already filled
-    filled_inlets = inlets.copy()
-    for nd in filled_inlets:
-        if filled[nd] == False:
-            filled_inlets.remove(nd)
-    
+    filled_inlets = deque(inlets)
+    for node in filled_inlets:
+        if filled[node] == False:
+            to_remove.append(node)
+
+    for node in to_remove:
+        filled_inlets.remove(node)
+
     # this part iteratively (should) calculate the effective inlet resistance
     # for every pore with the same distance (current_layer) to the network inlet
     current_layer = filled_inlets
-    to_visit[filled_inlets] = False
-    
+
+    for node in current_layer:
+        to_visit[node] = False
+
     while True in to_visit:
-        next_layer = []
-        for nd in current_layer:
-            next_layer = next_layer + list(net.neighbors(nd))
-        next_layer = list(np.unique(next_layer))
-        for nd in next_layer:
-            nnbb = list(net.neighbors(nd))
-            R_nb = []
+        next_layer = deque()
+        for node in current_layer:
+            for neighbour in net.neighbors(node):
+                if neighbour not in next_layer:
+                    next_layer.append(neighbour)
+
+        for node in next_layer:
+            R_nb = deque()
+            nnbb = net.neighbors(node)
             for nb in nnbb:
                 if nb in current_layer:
                     R_nb.append(R0[nb]+R_full[nb])
-            R0[nd] = effective_resistance(np.array(R_nb))
-            to_visit[nd] = False
-        current_layer = next_layer.copy()
-        for nd in current_layer:
-            if filled[nd] == False:
-                current_layer.remove(nd)
+
+            R0[node] = effective_resistance(np.array(R_nb))
+            to_visit[node] = False
+
+        current_layer = next_layer
+
+        to_remove.clear()
+        for node in current_layer:
+            if not filled[node]:
+                to_remove.append(node)
+
+        for node in to_remove:
+            current_layer.remove(node)
+
     return R0
 
 def simulation(pnm):
     # this part is necessary to match the network pore labels to the pore property arrays
-    nodes = pnm.graph.nodes
+    nodes = np.array(pnm.graph.nodes)
     n = len(nodes)  
-    n_init = np.array(nodes).max()+1
-    node_ids = list(nodes)
+    n_init = nodes.max()+1
+    node_ids = nodes
     node_ids.sort()
     node_ids = np.array(node_ids)
     
     
     num_inlets = max(int(0.1*n),6)
-    inlets = pnm.params['inlets']
+    inlets = np.array(pnm.params['inlets'])
     if not np.any(inlets):
         inlets = np.random.choice(nodes, num_inlets)
-        inlets = list(np.unique(inlets))
+        inlets = np.unique(inlets)
     temp_lets = []
     
     # double-check if inlet pores are actually in the network
@@ -261,46 +278,49 @@ def simulation(pnm):
     R_full = poiseuille_resistance(h0, r) +R0
 
     # this is the simulation:
-    active = inlets
-    new_active = []
+    active = deque(inlets)
+    newly_active = deque()
+    finished = deque()
 
     # every time step solve explicitly
     tt=0
     for t in time:
-        
         # first check, which pores are currently getting filled (active)
-        new_active = list(np.unique(new_active))
-        if len(new_active)>0:
-            for node in new_active:
-                if filled[node] == True:
-                    new_active.remove(node)
-            act_time[new_active] = t + t_w[new_active]
-            active = active + new_active
+        if len(newly_active) > 0:
+            for node in newly_active:
+                act_time[node] = t + t_w[node]
+                if not filled[node] and node not in active:
+                    active.append(node)
+
             R0 = outlet_resistances(inlets, filled, R_full, pnm.graph)
-        active = list(np.unique(active))
-        new_active = []
-        
+            newly_active.clear()
+
         # calculate the new filling state (h) for every active pore
         for node in active:
             if t>act_time[node]:
                 h_old = h[node]
                 #h[node] = h[node] + dt*capillary_rise(t-act_time[node], r[node], R0[node])
                 if node in inlets:
-                    #patch to consider inlet resitance at inlet pores
+                    # patch to consider inlet resitance at inlet pores
                     h[node] = h_old + pnm.params['dt']*capillary_rise2(r[node], R0[node]+ pnm.params['R_inlet'], h_old)
                 else:
-                    #influence of inlet resistance on downstream pores considered by initialization of poiseuille resistances
+                    # influence of inlet resistance on downstream pores considered by initialization of poiseuille resistances
                     h[node] = h_old + pnm.params['dt']*capillary_rise2(r[node], R0[node], h_old)
-                
+
                 # if pore is filled, look for neighbours that would now start to get filled
                 if h[node] >= h0[node]:
                     h[node] = h0[node]
                     filled[node] = True
-                    active.remove(node)
-                    new_active = new_active + list(pnm.graph.neighbors(node))              
-                
+                    finished.append(node)
+                    newly_active += pnm.graph.neighbors(node)
+
+        for node in finished:
+            active.remove(node)
+        finished.clear()
+
         V[tt] = total_volume(h[node_ids], r[node_ids])
         tt=tt+1
+
     return [time, V]
 
 def plot_results(pnm, results):
