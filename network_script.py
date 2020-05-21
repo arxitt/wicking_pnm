@@ -24,33 +24,6 @@ from collections import deque
 
 job_count = 4 # Default job count, 4 should be fine on most systems
 
-## define some general physical constants
-eta = 1 #mPa*s dynamic viscosity of water
-gamma = 72.6 #mN/m surface tension of water
-theta = 50 #° contact angle
-cos = np.cos(theta/180*np.pi)
-px = 2.75E-6 #m
-
-## function to calculate the resistance of a full pore
-poiseuille_resistance = lambda l, r, eta=eta: \
-    8*eta*l/np.pi/r**4
-
-## function to calculate the filling velocity considering the inlet resistance and tube radius
-capillary_rise = lambda t, r, R0, cos = cos, gamma = gamma, eta = eta: \
-    gamma*r*cos/2/eta/np.sqrt((R0*np.pi*r**4/8/eta)**2+gamma*r*cos*t/2/eta)
-
-## use capillary_rise2 because the former did not consider that R0 can change over time, should be irrelevant because pore contribution becomes quickly irrelevant , but still...
-capillary_rise2 = lambda r, R0, h, cos = cos, gamma = gamma, eta = eta: \
-    2*gamma*cos/(R0*np.pi*r**3+8*eta*h/r)
-
-## wrap up pore filling states to get total amount of water in the network
-total_volume = lambda h, r: \
-    (h*np.pi*r**2).sum()
-
-##  simple
-effective_resistance = lambda R_nb: \
-    1/(1/R_nb).sum()
-
 class WickingPNMStats:
     def __init__(self, path):
         # waiting time statistics
@@ -78,19 +51,47 @@ class WickingPNM:
         self.data = None
         self.graph = None
         self.waiting_times = np.array([])
+        self.V = None # Water volume in the network
+        self.filled = None # filled nodes
+        self.inlets = None # inlet pores
+        self.R0 = None # pore resistances
+        self.R_full = None # resistances when full
+        self.R_inlet = 0 # inlet resistance
+
         self.params = {
+            ## define some general physical constants (material-dependent)
+            'eta': 1, # (mPa*s) dynamic viscosity of water
+            'gamma': 72.6, # (mN/m) surface tension of water
+            'cos_theta': np.cos(np.radians(50)), # horizontal surface tension component
+            'px': 2.75E-6, # (m)
+
             ## intialize simulation boundaries
             # t_init is now irrelevent because flow rate is solved iteratively
             't_init': 1E-4, # (seconds) start time to stabilze simulation and avoid inertial regime
             'tmax': 1600, # (seconds)
             'dt': 1E-4, # (seconds)
 
-            # TODO: Describe the below
-            'R_inlet': 0,
+            # TODO: Describe the parameters below
             're': 0,
             'h0e': 0,
-            'inlets': False,
         }
+
+        cos = self.params['cos_theta']
+        gamma = self.params['gamma']
+        eta = self.params['eta']
+
+        ## function to calculate the resistance of a full pore
+        self.poiseuille_resistance = lambda l, r: \
+            8*eta*l/np.pi/r**4
+        ## function to calculate the filling velocity considering the inlet resistance and tube radius
+        self.capillary_rise = lambda t, r, R0: \
+            gamma*r*cos/2/eta/np.sqrt((R0*np.pi*r**4/8/eta)**2+gamma*r*cos*t/2/eta)
+        ## use capillary_rise2 because the former did not consider that R0 can change over time, should be irrelevant because pore contribution becomes quickly irrelevant , but still...
+        self.capillary_rise2 = lambda r, R0, h: \
+            2*gamma*cos/(R0*np.pi*r**3+8*eta*h/r)
+        ## wrap up pore filling states to get total amount of water in the network
+        self.total_volume = lambda h, r: \
+            (h*np.pi*r**2).sum()
 
         if not generate:
             print('Generating the network from data')
@@ -113,6 +114,7 @@ class WickingPNM:
         labels = dataset['label'].data
         self.data = dataset
 
+        # TODO: Find a quicker route to the coo_matrix
         print('Getting adjacency matrix for the experimental dataset')
         matrix = self.adjacency_matrix(label_matrix)
         # remove diagonal entries (self-loops)
@@ -133,8 +135,8 @@ class WickingPNM:
         # load pore properties
         print('Reading the pore network dataset at {}'.format(pore_data_path))
         pore = xr.load_dataset(pore_data_path)
-        self.params['re'] = px*np.sqrt(pore['value_properties'].sel(property = 'median_area').data/np.pi)
-        self.params['h0e'] = px*pore['value_properties'].sel(property = 'major_axis').data
+        self.params['re'] = self.params['px']*np.sqrt(pore['value_properties'].sel(property = 'median_area').data/np.pi)
+        self.params['h0e'] = self.params['px']*pore['value_properties'].sel(property = 'major_axis').data
 
         # define waiting times
         self.waiting_times = stats.delta_t_025
@@ -160,64 +162,56 @@ class WickingPNM:
 
         return matrix
 
-"""
-find your path through the filled network to calculate the inlet
-resistance imposed on the pores at the waterfront
-quick and dirty, this part makes the code slow and might even be wrong
-we have to check
-"""
-def outlet_resistances(inlets, filled, R_full, net):
-    # initialize pore resistances
-    R0 = np.zeros(len(filled))
-    # initialize "to-do list", only filled pores contribute to the network permeability
-    to_visit = np.zeros(len(filled), dtype=np.bool)
-    to_visit[np.where(filled)] = True
-    to_remove = deque()
+    """
+    find your path through the filled network to calculate the inlet
+    resistance imposed on the pores at the waterfront
+    quick and dirty, this part makes the code slow and might even be wrong
+    we have to check
+    """
+    def outlet_resistances(self):
+        # initialize pore resistances
+        self.R0 = np.zeros(len(self.filled))
 
-    #  check if inlet pores are already filled
-    filled_inlets = deque(inlets)
-    for node in filled_inlets:
-        if filled[node] == False:
-            to_remove.append(node)
+        # only filled pores contribute to the network permeability
+        filled_inlets = deque()
+        for inlet in self.inlets:
+            if self.filled[inlet]:
+                filled_inlets.append(inlet)
 
-    for node in to_remove:
-        filled_inlets.remove(node)
+        print(filled_inlets)
+        return self.outlet_resistances_r(filled_inlets)
 
-    # this part iteratively (should) calculate the effective inlet resistance
-    # for every pore with the same distance (current_layer) to the network inlet
-    current_layer = filled_inlets
+    # this function recursively should calculate the effective inlet resistance
+    # for every pore with the same distance (layer) to the network inlet
+    def outlet_resistances_r(self, layer):
+        if len(layer) == 0:
+            return self.R0
 
-    for node in current_layer:
-        to_visit[node] = False
+        print('layer', layer)
+        new_layer = deque()
+        for node in layer:
+            print(node, type(node))
+            for neighbour in self.graph.neighbors(node):
+                if neighbour not in new_layer:
+                    new_layer.append(neighbour)
 
-    while True in to_visit:
+        print('new layer', new_layer)
         next_layer = deque()
-        for node in current_layer:
-            for neighbour in net.neighbors(node):
-                if neighbour not in next_layer:
-                    next_layer.append(neighbour)
+        for node in new_layer:
+            neighbours = self.graph.neighbors(node)
+            inv_R_eff = np.float64(0)
 
-        for node in next_layer:
-            R_nb = deque()
-            nnbb = net.neighbors(node)
-            for nb in nnbb:
-                if nb in current_layer:
-                    R_nb.append(R0[nb]+R_full[nb])
+            for nb in neighbours:
+                if nb in layer:
+                    inv_R_eff += 1/(self.R0[nb] + pnm.R_full[nb])
 
-            R0[node] = effective_resistance(np.array(R_nb))
-            to_visit[node] = False
+            self.R0[node] += 1/inv_R_eff
 
-        current_layer = next_layer
+            if self.filled[node]:
+                next_layer.append(node)
 
-        to_remove.clear()
-        for node in current_layer:
-            if not filled[node]:
-                to_remove.append(node)
-
-        for node in to_remove:
-            current_layer.remove(node)
-
-    return R0
+        print('next layer', next_layer)
+        return self.outlet_resistances_r(next_layer)
 
 def simulation(pnm):
     # this part is necessary to match the network pore labels to the pore property arrays
@@ -227,10 +221,9 @@ def simulation(pnm):
     node_ids = nodes
     node_ids.sort()
     node_ids = np.array(node_ids)
-    
-    
+
     num_inlets = max(int(0.1*n),6)
-    inlets = np.array(pnm.params['inlets'])
+    inlets = np.array(pnm.inlets)
     if not np.any(inlets):
         inlets = np.random.choice(nodes, num_inlets)
         inlets = np.unique(inlets)
@@ -240,9 +233,8 @@ def simulation(pnm):
     for inlet in inlets:
         if inlet in pnm.graph:
             temp_lets.append(inlet)
-    inlets = temp_lets
+    pnm.inlets = inlets = temp_lets
     # print(inlets)
-
 
     # asign a random waiting time to every pore based on the experimental distribution
     if np.any(pnm.waiting_times):       
@@ -257,10 +249,10 @@ def simulation(pnm):
     # this copuld be solved more elegantly with xarray, but the intention was that it works
     
     time = np.arange(pnm.params['t_init'], pnm.params['tmax'], pnm.params['dt'])
+    filled = pnm.filled = np.zeros(n_init, dtype = np.bool)
+    R0 = pnm.R0 = np.zeros(n_init)
     act_time = np.zeros(n_init)
-    filled = np.zeros(n_init, dtype = np.bool)
     h = np.zeros(n_init)+1E-6
-    R0 = np.zeros(n_init)
     r = np.zeros(n_init)
     h0 = np.zeros(n_init)
     cc=0
@@ -270,8 +262,8 @@ def simulation(pnm):
         cc=cc+1
     
     R0[inlets] = pnm.params['R_inlet']
-    V=np.zeros(len(time))
-    R_full = poiseuille_resistance(h0, r) +R0
+    V = pnm.V = np.zeros(len(time))
+    pnm.R_full = pnm.poiseuille_resistance(h0, r) + R0
 
     # this is the simulation:
     active = deque(inlets)
@@ -288,20 +280,23 @@ def simulation(pnm):
                 if not filled[node] and node not in active:
                     active.append(node)
 
-            R0 = outlet_resistances(inlets, filled, R_full, pnm.graph)
+            R0 = pnm.outlet_resistances()
             newly_active.clear()
 
         # calculate the new filling state (h) for every active pore
         for node in active:
             if t>act_time[node]:
                 h_old = h[node]
+                dt = pnm.params['dt']
                 #h[node] = h[node] + dt*capillary_rise(t-act_time[node], r[node], R0[node])
+
                 if node in inlets:
                     # patch to consider inlet resitance at inlet pores
-                    h[node] = h_old + pnm.params['dt']*capillary_rise2(r[node], R0[node]+ pnm.params['R_inlet'], h_old)
+                    R_inlet = pnm.params['R_inlet']
+                    h[node] = h_old + dt*pnm.capillary_rise2(r[node], R0[node] + R_inlet, h_old)
                 else:
                     # influence of inlet resistance on downstream pores considered by initialization of poiseuille resistances
-                    h[node] = h_old + pnm.params['dt']*capillary_rise2(r[node], R0[node], h_old)
+                    h[node] = h_old + dt*pnm.capillary_rise2(r[node], R0[node], h_old)
 
                 # if pore is filled, look for neighbours that would now start to get filled
                 if h[node] >= h0[node]:
@@ -314,7 +309,7 @@ def simulation(pnm):
             active.remove(node)
         finished.clear()
 
-        V[tt] = total_volume(h[node_ids], r[node_ids])
+        V[tt] = pnm.total_volume(h[node_ids], r[node_ids])
         tt=tt+1
 
     return [time, V]
@@ -395,7 +390,7 @@ if __name__ == '__main__':
     results = []
     pnm = WickingPNM(args.generate_network, args.exp_data, args.pore_data, args.stats_data)
     pnm.params['R_inlet'] = 5E19 #Pas/m3
-    pnm.params['inlets'] = [162, 171, 207]
+    pnm.inlets = [162, 171, 207]
 
     ### Get simulation results
     I = args.iteration_count
