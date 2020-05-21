@@ -22,10 +22,6 @@ from joblib import Parallel, delayed
 from skimage.morphology import cube
 from collections import deque
 
-stats_path = r'data/network_statistics.nc'
-exp_data_path = r'data/dyn_data_T3_025_3_III.nc'
-pore_data_path = r'data/pore_props_T3_025_3_III.nc'
-
 job_count = 4 # Default job count, 4 should be fine on most systems
 
 ## define some general physical constants
@@ -377,41 +373,43 @@ def plot_results(pnm, results):
 if __name__ == '__main__':
     ### Parse arguments
     parser = argparse.ArgumentParser(description = 'Simulation parameters')
-    parser.add_argument('-G', action = 'store_true', help = 'Generate an artificial pore network model and ignore -E, -P and -S')
-    parser.add_argument('-n', type = int, default = 1, help = 'The amount of times to run the simulation (default to 1)')
-    parser.add_argument('-j', type = int, default = job_count, help = 'The amount of jobs to use (default to {})'.format(job_count))
+    parser.add_argument('-G', '--generate-network', action = 'store_true', help = 'Generate an artificial pore network model and ignore -E, -P and -S')
+    parser.add_argument('-c', '--iteration-count', type = int, default = 1, help = 'The amount of times to run the simulation (default to 1)')
+    parser.add_argument('-j', '--job-count', type = int, default = job_count, help = 'The amount of jobs to use (default to {})'.format(job_count))
     parser.add_argument('-E', '--exp-data', default = None, help = 'Path to the experimental data')
     parser.add_argument('-P', '--pore-data', default = None, help = 'Path to the pore network data')
     parser.add_argument('-S', '--stats-data', default = None, help = 'Path to the network statistics')
+    parser.add_argument('-Np', '--no-plot', action = 'store_true', help = 'Don\'t plot the results')
 
     args = parser.parse_args()
-    if not args.G and not all([args.exp_data, args.pore_data, args.stats_data]):
+    if not args.generate_network and not all([args.exp_data, args.pore_data, args.stats_data]):
         raise ValueError('Either -G has to be used, or all of the data paths have to be defined.')
-    if args.n < 0:
-        raise ValueError('-n has to be greater or equal to 0.')
-    if args.j <= 0:
+    if args.iteration_count < 0:
+        raise ValueError('-c has to be greater or equal to 0.')
+    if args.job_count <= 0:
         raise ValueError('-j has to be greater or equal to 1.')
 
-    job_count = args.j # This is a global variable that remains constant from here
-    n = args.n
+    job_count = args.job_count # This is a global variable that remains constant from here
 
     ### Initialize the PNM
     results = []
-    pnm = WickingPNM(args.G, args.exp_data, args.pore_data, args.stats_data)
+    pnm = WickingPNM(args.generate_network, args.exp_data, args.pore_data, args.stats_data)
     pnm.params['R_inlet'] = 5E19 #Pas/m3
     pnm.params['inlets'] = [162, 171, 207]
 
     ### Get simulation results
-    if n == 0:
+    I = args.iteration_count
+    if I == 0:
         # We just wanted to build the network
         sys.exit()
-    if n == 1:
+    if I == 1:
         print('Starting the simulation to run once.')
         results = [simulation(pnm)]
     else:
-        njobs = min(n, job_count)
-        print('Starting the simulation for {} times with {} jobs.'.format(n, njobs))
+        njobs = min(I, job_count)
+        print('Starting the simulation for {} times with {} jobs.'.format(I, njobs))
         with mp.Pool(njobs) as pool:
-            results = pool.map(simulation, np.full(n, pnm))
+            results = pool.map(simulation, np.full(I, pnm))
 
-    plot_results(pnm, results)
+    if not args.no_plot:
+        plot_results(pnm, results)
