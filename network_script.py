@@ -115,9 +115,16 @@ class WickingPNM:
         labels = dataset['label'].data
         self.data = dataset
 
+        if verbose:
+            print('labels', labels)
+            print('label matrix', label_matrix, label_matrix.shape)
+
         # TODO: Find a quicker route to the coo_matrix
         print('Getting adjacency matrix for the experimental dataset')
         matrix = self.adjacency_matrix(label_matrix)
+        if verbose:
+            print('adjacency matrix', matrix)
+
         # remove diagonal entries (self-loops)
         matrix[np.where(np.diag(np.ones(matrix.shape[0], dtype=np.bool)))] = False
 
@@ -147,6 +154,10 @@ class WickingPNM:
             mask = label_im==label
             mask = sp.ndimage.binary_dilation(input = mask, structure = struct(3))
             neighbours = np.unique(label_im[mask])[1:]
+
+            # A node can't be its own neighbour
+            neighbours = neighbours[np.where(neighbours != label)]
+
             return neighbours
 
         size = len(label_im)
@@ -155,7 +166,13 @@ class WickingPNM:
 
         results = Parallel(n_jobs=job_count)(delayed(neighbour_search)(label) for label in labels)
 
+        if verbose:
+            print('\nFilling matrix')
         for (label, result) in zip(labels, results):
+            if verbose:
+                print('label', label)
+                print('neighbours', result, '\n')
+
             matrix[label, result] = True
 
         # make sure that matrix is symmetric (as it should be)
