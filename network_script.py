@@ -70,7 +70,7 @@ class WickingPNM:
             # t_init is now irrelevent because flow rate is solved iteratively
             't_init': 1E-4, # (seconds) start time to stabilze simulation and avoid inertial regime
             'tmax': 1600, # (seconds)
-            'dt': 1E-4, # (seconds)
+            'dt': 1E-3, # (seconds)
 
             # TODO: Describe the parameters below
             're': 0,
@@ -274,36 +274,39 @@ def simulation(pnm):
     newly_active = deque()
     finished = deque()
 
+    # Create a dictionary for quicker lookup of whether the node is an inlet
+    inlets_dict = {}
+    for node in inlets:
+        inlets_dict[node] = True
+
     # every time step solve explicitly
-    tt=0
+    tt = 0
+    dt = 0
     for t in time:
         # first check, which pores are currently getting filled (active)
-        if len(newly_active) > 0:
-            for node in newly_active:
-                act_time[node] = t + t_w[node]
-                if not filled[node] and node not in active:
-                    if verbose:
-                        print('\nnew active node\n', node)
-
-                    active.append(node)
-            newly_active.clear()
-
+        if len(newly_active) != 0:
             R0 = pnm.outlet_resistances()
+
+        for node in newly_active:
+            act_time[node] = t + t_w[node]
+            if not filled[node] and node not in active:
+                if verbose:
+                    print('\nnew active node\n', node)
+
+                active.append(node)
+        newly_active.clear()
 
         # calculate the new filling state (h) for every active pore
         for node in active:
-            if t>act_time[node]:
-                h_old = h[node]
+            if t > act_time[node]:
                 dt = pnm.params['dt']
-                #h[node] = h[node] + dt*capillary_rise(t-act_time[node], r[node], R0[node])
-
-                if node in inlets:
+                if node in inlets_dict:
                     # patch to consider inlet resitance at inlet pores
                     R_inlet = pnm.params['R_inlet']
-                    h[node] = h_old + dt*pnm.capillary_rise2(r[node], R0[node] + R_inlet, h_old)
+                    h[node] += dt*pnm.capillary_rise2(r[node], R0[node] + R_inlet, h[node])
                 else:
                     # influence of inlet resistance on downstream pores considered by initialization of poiseuille resistances
-                    h[node] = h_old + dt*pnm.capillary_rise2(r[node], R0[node], h_old)
+                    h[node] += dt*pnm.capillary_rise2(r[node], R0[node], h[node])
 
                 # if pore is filled, look for neighbours that would now start to get filled
                 if h[node] >= h0[node]:
@@ -320,7 +323,7 @@ def simulation(pnm):
         finished.clear()
 
         V[tt] = pnm.total_volume(h[node_ids], r[node_ids])
-        tt=tt+1
+        tt += 1
 
     return [time, V]
 
