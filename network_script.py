@@ -23,6 +23,7 @@ from skimage.morphology import cube
 from collections import deque
 
 job_count = 4 # Default job count, 4 should be fine on most systems
+verbose = False
 
 class WickingPNMStats:
     def __init__(self, path):
@@ -178,40 +179,43 @@ class WickingPNM:
             if self.filled[inlet]:
                 filled_inlets.append(inlet)
 
-        print(filled_inlets)
+        if verbose:
+            print('\nfilled inlets', filled_inlets)
+
         return self.outlet_resistances_r(filled_inlets)
 
     # this function recursively should calculate the effective inlet resistance
     # for every pore with the same distance (layer) to the network inlet
-    def outlet_resistances_r(self, layer):
+    def outlet_resistances_r(self, layer, visited = {}):
         if len(layer) == 0:
             return self.R0
 
-        print('layer', layer)
-        new_layer = deque()
-        for node in layer:
-            print(node, type(node))
-            for neighbour in self.graph.neighbors(node):
-                if neighbour not in new_layer:
-                    new_layer.append(neighbour)
+        if verbose:
+            print('current layer', layer)
 
-        print('new layer', new_layer)
         next_layer = deque()
-        for node in new_layer:
+        for node in layer:
             neighbours = self.graph.neighbors(node)
             inv_R_eff = np.float64(0)
 
-            for nb in neighbours:
-                if nb in layer:
-                    inv_R_eff += 1/(self.R0[nb] + pnm.R_full[nb])
+            if verbose:
+                print('visiting node', node)
+
+            for neighbour in neighbours:
+                if neighbour in layer:
+                    inv_R_eff += 1/np.float64(self.R0[nb] + pnm.R_full[nb])
 
             self.R0[node] += 1/inv_R_eff
 
-            if self.filled[node]:
+            if self.filled[node] and node not in visited:
                 next_layer.append(node)
 
-        print('next layer', next_layer)
-        return self.outlet_resistances_r(next_layer)
+            visited[node] = True
+
+        if verbose:
+            print('next layer', next_layer)
+
+        return self.outlet_resistances_r(next_layer, visited)
 
 def simulation(pnm):
     # this part is necessary to match the network pore labels to the pore property arrays
@@ -278,10 +282,13 @@ def simulation(pnm):
             for node in newly_active:
                 act_time[node] = t + t_w[node]
                 if not filled[node] and node not in active:
+                    if verbose:
+                        print('\nnew active node\n', node)
+
                     active.append(node)
+            newly_active.clear()
 
             R0 = pnm.outlet_resistances()
-            newly_active.clear()
 
         # calculate the new filling state (h) for every active pore
         for node in active:
@@ -306,6 +313,9 @@ def simulation(pnm):
                     newly_active += pnm.graph.neighbors(node)
 
         for node in finished:
+            if verbose:
+                print('\nnode finished\n', node)
+
             active.remove(node)
         finished.clear()
 
@@ -344,7 +354,7 @@ def plot_results(pnm, results):
 
     # compare to experimental data
     plt.figure()
-    vxm3 = px**3
+    vxm3 = pnm.params['px']**3
     test = np.array(results)
     std = test[:,1,:].std(axis=0)
     mean = test[:,1,:].mean(axis=0)
@@ -368,6 +378,7 @@ def plot_results(pnm, results):
 if __name__ == '__main__':
     ### Parse arguments
     parser = argparse.ArgumentParser(description = 'Simulation parameters')
+    parser.add_argument('-v', '--verbose', action = 'store_true', help = 'Be verbose during the simulation')
     parser.add_argument('-G', '--generate-network', action = 'store_true', help = 'Generate an artificial pore network model and ignore -E, -P and -S')
     parser.add_argument('-c', '--iteration-count', type = int, default = 1, help = 'The amount of times to run the simulation (default to 1)')
     parser.add_argument('-j', '--job-count', type = int, default = job_count, help = 'The amount of jobs to use (default to {})'.format(job_count))
@@ -384,7 +395,9 @@ if __name__ == '__main__':
     if args.job_count <= 0:
         raise ValueError('-j has to be greater or equal to 1.')
 
-    job_count = args.job_count # This is a global variable that remains constant from here
+    # These are global variables that remain constant from here
+    job_count = args.job_count
+    verbose = args.verbose
 
     ### Initialize the PNM
     results = []
