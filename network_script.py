@@ -269,8 +269,7 @@ def simulation(pnm):
 
     # create new pore property arrays where the pore label corresponds to the array index
     # this copuld be solved more elegantly with xarray, but the intention was that it works
-    
-    time = np.arange(pnm.params['dt'], pnm.params['tmax'], pnm.params['dt'])
+
     filled = pnm.filled = np.zeros(n_init, dtype = np.bool)
     R0 = pnm.R0 = np.zeros(n_init)
     act_time = np.zeros(n_init)
@@ -284,7 +283,6 @@ def simulation(pnm):
         cc=cc+1
     
     R0[inlets] = pnm.params['R_inlet']
-    V = pnm.V = np.zeros(len(time))
     pnm.R_full = pnm.poiseuille_resistance(h0, r) + R0
 
     # this is the simulation:
@@ -298,9 +296,15 @@ def simulation(pnm):
         inlets_dict[node] = True
 
     # every time step solve explicitly
-    tt = 0
-    dt = 0
-    for t in time:
+    R_inlet = pnm.params['R_inlet']
+    tmax = pnm.params['tmax']
+    dt = np.float64(pnm.params['dt'])
+    t = dt
+
+    step = 0
+    time = np.zeros(np.int(np.ceil(tmax/dt)))
+    V = pnm.V = np.zeros(len(time))
+    while t <= tmax:
         # first check, which pores are currently getting filled (active)
         if len(newly_active) != 0:
             R0 = pnm.outlet_resistances()
@@ -317,10 +321,8 @@ def simulation(pnm):
         # calculate the new filling state (h) for every active pore
         for node in active:
             if t > act_time[node]:
-                dt = pnm.params['dt']
                 if node in inlets_dict:
                     # patch to consider inlet resitance at inlet pores
-                    R_inlet = pnm.params['R_inlet']
                     h[node] += dt*pnm.capillary_rise2(r[node], R0[node] + R_inlet, h[node])
                 else:
                     # influence of inlet resistance on downstream pores considered by initialization of poiseuille resistances
@@ -340,8 +342,10 @@ def simulation(pnm):
             active.remove(node)
         finished.clear()
 
-        V[tt] = pnm.total_volume(h[node_ids], r[node_ids])
-        tt += 1
+        time[step] = t
+        V[step] = pnm.total_volume(h[node_ids], r[node_ids])
+        step += 1
+        t += dt
 
     return [time, V]
 
@@ -402,7 +406,7 @@ if __name__ == '__main__':
     parser.add_argument('-v', '--verbose', action = 'store_true', help = 'Be verbose during the simulation')
     parser.add_argument('-G', '--generate-network', action = 'store_true', help = 'Generate an artificial pore network model and ignore -E, -P and -S')
     parser.add_argument('-c', '--iteration-count', type = int, default = 1, help = 'The amount of times to run the simulation (default to 1)')
-    parser.add_argument('-t', '--time-delta', type = float, default = 1E-3, help = 'The atomic time step to use throughout the simulation (default to 0.001)')
+    parser.add_argument('-t', '--time-delta', type = float, default = 1E-3, help = 'The atomic time step to use throughout the simulation in seconds (default to 0.001)')
     parser.add_argument('-j', '--job-count', type = int, default = job_count, help = 'The amount of jobs to use (default to {})'.format(job_count))
     parser.add_argument('-E', '--exp-data', default = None, help = 'Path to the experimental data')
     parser.add_argument('-P', '--pore-data', default = None, help = 'Path to the pore network data')
@@ -425,7 +429,7 @@ if __name__ == '__main__':
     results = []
     pnm = WickingPNM(args.generate_network, args.exp_data, args.pore_data, args.stats_data)
     pnm.params['dt'] = args.time_delta
-    pnm.params['R_inlet'] = 5E19 #Pas/m3
+    pnm.params['R_inlet'] = np.int(5E19) #Pas/m3
     pnm.inlets = [162, 171, 207]
 
     ### Get simulation results
