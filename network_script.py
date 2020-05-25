@@ -60,39 +60,20 @@ class WickingPNM:
         self.R_inlet = 0 # inlet resistance
 
         self.params = {
-            ## define some general physical constants (material-dependent)
+            # General physical constants (material-dependent)
             'eta': 1, # (mPa*s) dynamic viscosity of water
             'gamma': 72.6, # (mN/m) surface tension of water
             'cos_theta': np.cos(np.radians(50)), # horizontal surface tension component
             'px': 2.75E-6, # (m)
 
-            ## intialize simulation boundaries
-            # t_init is now irrelevent because flow rate is solved iteratively
-            't_init': 1E-4, # (seconds) start time to stabilze simulation and avoid inertial regime
+            # Simulation boundaries
             'tmax': 1600, # (seconds)
             'dt': 1E-3, # (seconds)
 
-            # TODO: Describe the parameters below
+            # Experimental radius and height
             're': 0,
             'h0e': 0,
         }
-
-        cos = self.params['cos_theta']
-        gamma = self.params['gamma']
-        eta = self.params['eta']
-
-        ## function to calculate the resistance of a full pore
-        self.poiseuille_resistance = lambda l, r: \
-            8*eta*l/np.pi/r**4
-        ## function to calculate the filling velocity considering the inlet resistance and tube radius
-        self.capillary_rise = lambda t, r, R0: \
-            gamma*r*cos/2/eta/np.sqrt((R0*np.pi*r**4/8/eta)**2+gamma*r*cos*t/2/eta)
-        ## use capillary_rise2 because the former did not consider that R0 can change over time, should be irrelevant because pore contribution becomes quickly irrelevant , but still...
-        self.capillary_rise2 = lambda r, R0, h: \
-            2*gamma*cos/(R0*np.pi*r**3+8*eta*h/r)
-        ## wrap up pore filling states to get total amount of water in the network
-        self.total_volume = lambda h, r: \
-            (h*np.pi*r**2).sum()
 
         if not generate:
             print('Generating the network from data')
@@ -234,6 +215,26 @@ class WickingPNM:
 
         return self.outlet_resistances_r(next_layer, visited)
 
+    ## function to calculate the resistance of a full pore
+    def poiseuille_resistance(self, l, r):
+        p = self.params
+        return 8*p['eta']*l/np.pi/r**4
+
+    ## function to calculate the filling velocity considering the inlet resistance and tube radius
+    def capillary_rise(self, t, r, R0):
+        p = self.params
+        gamma, cos, eta = p['gamma'], p['cos_theta'], p['eta']
+        return gamma*r*cos/2/eta/np.sqrt((R0*np.pi*r**4/8/eta)**2+gamma*r*cos*t/2/eta)
+
+    ## use capillary_rise2 because the former did not consider that R0 can change over time, should be irrelevant because pore contribution becomes quickly irrelevant , but still...
+    def capillary_rise2(self, r, R0, h):
+        p = self.params
+        return 2*p['gamma']*p['cos_theta']/(R0*np.pi*r**3+8*p['eta']*h/r)
+
+    ## wrap up pore filling states to get total amount of water in the network
+    def total_volume(self, h, r):
+        return (h*np.pi*r**2).sum()
+
 def simulation(pnm):
     # this part is necessary to match the network pore labels to the pore property arrays
     nodes = np.array(pnm.graph.nodes)
@@ -269,7 +270,7 @@ def simulation(pnm):
     # create new pore property arrays where the pore label corresponds to the array index
     # this copuld be solved more elegantly with xarray, but the intention was that it works
     
-    time = np.arange(pnm.params['t_init'], pnm.params['tmax'], pnm.params['dt'])
+    time = np.arange(pnm.params['dt'], pnm.params['tmax'], pnm.params['dt'])
     filled = pnm.filled = np.zeros(n_init, dtype = np.bool)
     R0 = pnm.R0 = np.zeros(n_init)
     act_time = np.zeros(n_init)
@@ -401,6 +402,7 @@ if __name__ == '__main__':
     parser.add_argument('-v', '--verbose', action = 'store_true', help = 'Be verbose during the simulation')
     parser.add_argument('-G', '--generate-network', action = 'store_true', help = 'Generate an artificial pore network model and ignore -E, -P and -S')
     parser.add_argument('-c', '--iteration-count', type = int, default = 1, help = 'The amount of times to run the simulation (default to 1)')
+    parser.add_argument('-t', '--time-delta', type = float, default = 1E-3, help = 'The atomic time step to use throughout the simulation (default to 0.001)')
     parser.add_argument('-j', '--job-count', type = int, default = job_count, help = 'The amount of jobs to use (default to {})'.format(job_count))
     parser.add_argument('-E', '--exp-data', default = None, help = 'Path to the experimental data')
     parser.add_argument('-P', '--pore-data', default = None, help = 'Path to the pore network data')
@@ -422,6 +424,7 @@ if __name__ == '__main__':
     ### Initialize the PNM
     results = []
     pnm = WickingPNM(args.generate_network, args.exp_data, args.pore_data, args.stats_data)
+    pnm.params['dt'] = args.time_delta
     pnm.params['R_inlet'] = 5E19 #Pas/m3
     pnm.inlets = [162, 171, 207]
 
@@ -431,13 +434,12 @@ if __name__ == '__main__':
         # We just wanted to build the network
         sys.exit()
     if I == 1:
-        print('Starting the simulation to run once.')
+        print('Starting the simulation to run once with a timestep of {}s.'.format(args.time_delta))
         results = [simulation(pnm)]
     else:
         njobs = min(I, job_count)
-        print('Starting the simulation for {} times with {} jobs.'.format(I, njobs))
-        with mp.Pool(njobs) as pool:
-            results = pool.map(simulation, np.full(I, pnm))
+        print('Starting the simulation with a timestep of {}s for {} times with {} jobs.'.format(args.time_delta, I, njobs))
+        results = Parallel(n_jobs=njobs)(delayed(simulation)(pnm) for i in range(I))
 
     if not args.no_plot:
         plot_results(pnm, results)
