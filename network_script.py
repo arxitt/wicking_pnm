@@ -63,12 +63,13 @@ class WickingPNM:
             # General physical constants (material-dependent)
             'eta': 1, # (mPa*s) dynamic viscosity of water
             'gamma': 72.6, # (mN/m) surface tension of water
-            'cos_theta': np.cos(np.radians(50)), # horizontal surface tension component
+            'cos_theta': np.cos(np.radians(50)), # Young's contact angle
             'px': 2.75E-6, # (m)
+            
 
             # Simulation boundaries
             'tmax': 1600, # (seconds)
-            'dt': 1E-3, # (seconds)
+            'dt': 1E-3, # (seconds), I think it's safe to increase it a bit, maybe x10-100
 
             # Experimental radius and height
             're': 0,
@@ -101,6 +102,7 @@ class WickingPNM:
             print('label matrix', label_matrix, label_matrix.shape)
 
         # TODO: Find a quicker route to the coo_matrix
+        # there is a possible route via scipy.ndimage.find_objects with the benefit of less memory consumption
         print('Getting adjacency matrix for the experimental dataset')
         matrix = self.adjacency_matrix(label_matrix)
         if verbose:
@@ -126,6 +128,7 @@ class WickingPNM:
         pore = xr.load_dataset(pore_data_path)
         self.params['re'] = self.params['px']*np.sqrt(pore['value_properties'].sel(property = 'median_area').data/np.pi)
         self.params['h0e'] = self.params['px']*pore['value_properties'].sel(property = 'major_axis').data
+        # you can also get the parameter px from the pore-xarray-file via px = pore.attrs['voxel'].data
 
         # define waiting times
         self.waiting_times = stats.delta_t_025
@@ -429,7 +432,7 @@ if __name__ == '__main__':
     results = []
     pnm = WickingPNM(args.generate_network, args.exp_data, args.pore_data, args.stats_data)
     pnm.params['dt'] = args.time_step
-    pnm.params['R_inlet'] = np.int(5E19) #Pas/m3
+    pnm.params['R_inlet'] = np.int(2E17) #Pas/m3
     pnm.inlets = [162, 171, 207]
 
     ### Get simulation results
