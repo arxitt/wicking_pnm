@@ -406,7 +406,7 @@ if __name__ == '__main__':
     parser.add_argument('-v', '--verbose', action = 'store_true', help = 'Be verbose during the simulation')
     parser.add_argument('-G', '--generate-network', action = 'store_true', help = 'Generate an artificial pore network model and ignore -E, -P and -S')
     parser.add_argument('-c', '--iteration-count', type = int, default = 1, help = 'The amount of times to run the simulation (default to 1)')
-    parser.add_argument('-t', '--time-delta', type = float, default = 1E-3, help = 'The atomic time step to use throughout the simulation in seconds (default to 0.001)')
+    parser.add_argument('-t', '--time-step', type = float, default = 1E-3, help = 'The atomic time step to use throughout the simulation in seconds (default to 0.001)')
     parser.add_argument('-j', '--job-count', type = int, default = job_count, help = 'The amount of jobs to use (default to {})'.format(job_count))
     parser.add_argument('-E', '--exp-data', default = None, help = 'Path to the experimental data')
     parser.add_argument('-P', '--pore-data', default = None, help = 'Path to the pore network data')
@@ -428,7 +428,7 @@ if __name__ == '__main__':
     ### Initialize the PNM
     results = []
     pnm = WickingPNM(args.generate_network, args.exp_data, args.pore_data, args.stats_data)
-    pnm.params['dt'] = args.time_delta
+    pnm.params['dt'] = args.time_step
     pnm.params['R_inlet'] = np.int(5E19) #Pas/m3
     pnm.inlets = [162, 171, 207]
 
@@ -438,11 +438,11 @@ if __name__ == '__main__':
         # We just wanted to build the network
         sys.exit()
     if I == 1:
-        print('Starting the simulation to run once with a timestep of {}s.'.format(args.time_delta))
+        print('Starting the simulation to run once with a timestep of {}s.'.format(args.time_step))
         results = [simulation(pnm)]
     else:
         njobs = min(I, job_count)
-        print('Starting the simulation with a timestep of {}s for {} times with {} jobs.'.format(args.time_delta, I, njobs))
+        print('Starting the simulation with a timestep of {}s for {} times with {} jobs.'.format(args.time_step, I, njobs))
         results = Parallel(n_jobs=njobs)(delayed(simulation)(pnm) for i in range(I))
 
     if not args.no_plot:
