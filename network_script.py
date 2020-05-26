@@ -126,9 +126,9 @@ class WickingPNM:
         # load pore properties
         print('Reading the pore network dataset at {}'.format(pore_data_path))
         pore = xr.load_dataset(pore_data_path)
-        self.params['re'] = self.params['px']*np.sqrt(pore['value_properties'].sel(property = 'median_area').data/np.pi)
-        self.params['h0e'] = self.params['px']*pore['value_properties'].sel(property = 'major_axis').data
-        # you can also get the parameter px from the pore-xarray-file via px = pore.attrs['voxel'].data
+        px = pore.attrs['voxel'].data
+        self.params['re'] = px*np.sqrt(pore['value_properties'].sel(property = 'median_area').data/np.pi)
+        self.params['h0e'] = px*pore['value_properties'].sel(property = 'major_axis').data
 
         # define waiting times
         self.waiting_times = stats.delta_t_025
