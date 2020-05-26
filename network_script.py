@@ -48,7 +48,7 @@ class WickingPNMStats:
         self.delta_t_all = stats_dataset['deltatall'].data
 
 class WickingPNM:
-    def __init__(self, generate, exp_data_path = None, pore_data_path = None, stats_path = None):
+    def __init__(self):
         self.data = None
         self.graph = None
         self.waiting_times = np.array([])
@@ -76,21 +76,23 @@ class WickingPNM:
             'h0e': 0,
         }
 
-        if not generate:
-            print('Generating the network from data')
-            stats = WickingPNMStats(stats_path)
-            self.from_data(exp_data_path, pore_data_path, stats)
-            return
+    def generate(self, function, *args):
+        graph = self.graph = function(*args)
+        size = len(graph.nodes)
 
-        print('Generating an artificial network (UNIMPLEMENTED)');
-        # TODO: Get the graph generator and its arguments from the constructor's arguments
-        self.generate_artificial_pnm(nx.watts_strogatz_graph)
+        re = self.params['re'] = np.random.rand(size)
+        h0e = self.params['h0e'] = np.random.rand(size)
+        wt = self.waiting_times = np.random.rand(size)
 
-    def generate_artificial_pnm(self, function):
-        # TODO: Generate a graph in self.graph using function
-        return
+        # re and h0e are on a scale of 1E-6 to 1E-3, waiting times from 1 to 1000
+        for i in range(size):
+            re[i] /= 10**np.random.randint(3, 6)
+            h0e[i] /= 10**np.random.randint(3, 6)
+            wt[i] *= 10**np.random.randint(0, 3)
 
-    def from_data(self, exp_data_path, pore_data_path, stats):
+    def from_data(self, exp_data_path, pore_data_path, stats_path):
+        stats = WickingPNMStats(stats_path)
+
         print('Reading the experimental dataset at {}'.format(exp_data_path))
         dataset = xr.load_dataset(exp_data_path)
         label_matrix = dataset['label_matrix'].data
@@ -266,9 +268,8 @@ def simulation(pnm):
         ecdf = ECDF(pnm.waiting_times)
         f = interp1d(ecdf.y[1:], ecdf.x[1:], fill_value = 'extrapolate')
         prob = np.random.rand(n_init)
-        t_w = f(prob)     
-    #t_w = t_w*0  
-
+        t_w = f(prob)
+    #t_w = t_w*0
 
     # create new pore property arrays where the pore label corresponds to the array index
     # this copuld be solved more elegantly with xarray, but the intention was that it works
@@ -352,55 +353,60 @@ def simulation(pnm):
 
     return [time, V]
 
-def plot_results(pnm, results):
-    for result in results:
-        plt.loglog(result[0], result[1])   
+def plot(pnm, results):
+    def plot_simulation_logarithmic():
+        for result in results:
+            plt.loglog(result[0], result[1])   
 
-    plt.title('experimental network')
-    plt.xlabel('time [s]')
-    plt.ylabel('volume [m3]')
-    plt.xlim(0.1,pnm.params['tmax'])
+        plt.title('simulation results')
+        plt.xlabel('time [s]')
+        plt.ylabel('volume [m3]')
+        plt.xlim(0.1,pnm.params['tmax'])
 
-    plt.figure()
-    for result in results:
-        plt.plot(result[0], result[1])   
-    plt.title('experimental network')
-    plt.xlabel('time [s]')
-    plt.ylabel('volume [m3]')
+    def plot_simulation():
+        plt.figure()
+        for result in results:
+            plt.plot(result[0], result[1])   
+        plt.title('experimental network')
+        plt.xlabel('time [s]')
+        plt.ylabel('volume [m3]')
 
-    plt.figure()
-    Qmax = 0
-    for result in results:
-        Q = np.gradient(result[1], result[0])
-        Qmax = np.max([Qmax, Q[5:].max()])
-        plt.plot(result[0], np.gradient(result[1]))
+    def plot_flux():
+        plt.figure()
+        Qmax = 0
+        for result in results:
+            Q = np.gradient(result[1], result[0])
+            Qmax = np.max([Qmax, Q[5:].max()])
+            plt.plot(result[0], np.gradient(result[1]))
     
-    plt.title('experimental network')
-    plt.xlabel('time [s]')
-    plt.ylabel('flux [m3/s]')
-    plt.ylim(0, Qmax)
+        plt.title('experimental network')
+        plt.xlabel('time [s]')
+        plt.ylabel('flux [m3/s]')
+        plt.ylim(0, Qmax)
 
-    # compare to experimental data
-    plt.figure()
-    vxm3 = pnm.params['px']**3
-    test = np.array(results)
-    std = test[:,1,:].std(axis=0)
-    mean = test[:,1,:].mean(axis=0)
-    time_line = test[0,0,:]
+    def plot_comparison():
+        # compare to experimental data
+        plt.figure()
+        vxm3 = pnm.params['px']**3
+        test = np.array(results)
+        std = test[:,1,:].std(axis=0)
+        mean = test[:,1,:].mean(axis=0)
+        time_line = test[0,0,:]
 
-    # Configure the axes
-    time_coarse = time_line[::1000]
-    mean_coarse = mean[::1000]
-    std_coarse = std[::1000]
+        # Configure the axes
+        time_coarse = time_line[::1000]
+        mean_coarse = mean[::1000]
+        std_coarse = std[::1000]
 
-    # Configure the plot
-    plt.plot(time_coarse, mean_coarse)#)
-    plt.fill_between(time_coarse, mean_coarse-std_coarse, mean_coarse+std_coarse, alpha=0.2)
+        # Configure the plot
+        plt.plot(time_coarse, mean_coarse)#)
+        plt.fill_between(time_coarse, mean_coarse-std_coarse, mean_coarse+std_coarse, alpha=0.2)
 
-    # Create data and plot it
-    (pnm.data['volume'].sum(axis = 0)*vxm3).plot(color='k')
+        if pnm.data:
+            (pnm.data['volume'].sum(axis = 0)*vxm3).plot(color='k')
 
-    # Show the plot
+    plot_simulation()
+    plot_comparison()
     plt.show()
 
 if __name__ == '__main__':
@@ -418,8 +424,6 @@ if __name__ == '__main__':
     parser.add_argument('-Np', '--no-plot', action = 'store_true', help = 'Don\'t plot the results')
 
     args = parser.parse_args()
-    if not args.generate_network and not all([args.exp_data, args.pore_data, args.stats_data]):
-        raise ValueError('Either -G has to be used, or all of the data paths have to be defined.')
     if args.iteration_count < 0:
         raise ValueError('-c has to be greater or equal to 0.')
     if args.job_count <= 0:
@@ -431,11 +435,25 @@ if __name__ == '__main__':
 
     ### Initialize the PNM
     results = []
-    pnm = WickingPNM(args.generate_network, args.exp_data, args.pore_data, args.stats_data)
+    pnm = WickingPNM()
     pnm.params['dt'] = args.time_step
     pnm.params['tmax'] = args.max_time
     pnm.params['R_inlet'] = np.int(2E17) #Pas/m3
     pnm.inlets = [162, 171, 207]
+
+    if args.generate_network:
+        print('Generating an artificial network');
+        pnm.generate(nx.watts_strogatz_graph, 100, 3, 0.2)
+    elif all([args.exp_data, args.pore_data, args.stats_data]):
+        print('Reading the network from data')
+        pnm.from_data(args.exp_data, args.pore_data, args.stats_data)
+    else:
+        raise ValueError('Either -G has to be used, or all of the data paths have to be defined.')
+
+    if verbose:
+        print('re', pnm.params['re'])
+        print('h0e', pnm.params['h0e'])
+        print('waiting times', pnm.waiting_times)
 
     ### Get simulation results
     I = args.iteration_count
@@ -451,4 +469,4 @@ if __name__ == '__main__':
         results = Parallel(n_jobs=njobs)(delayed(simulation)(pnm) for i in range(I))
 
     if not args.no_plot:
-        plot_results(pnm, results)
+        plot(pnm, results)
