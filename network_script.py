@@ -79,6 +79,7 @@ class WickingPNM:
     def generate(self, function, *args):
         graph = self.graph = function(*args)
         size = len(graph.nodes)
+        print('Generated graph of size {}, filling with random data'.format(size))
 
         re = self.params['re'] = np.random.rand(size)
         h0e = self.params['h0e'] = np.random.rand(size)
@@ -426,6 +427,7 @@ if __name__ == '__main__':
     parser.add_argument('-c', '--iteration-count', type = int, default = 1, help = 'The amount of times to run the simulation (default to 1)')
     parser.add_argument('-s', '--time-step', type = float, default = 1E-3, help = 'The atomic time step to use throughout the simulation in seconds (default to 0.001)')
     parser.add_argument('-t', '--max-time', type = float, default = 1600, help = 'The amount of time to simulate in seconds (default to 1600)')
+    parser.add_argument('-n', '--node-count', type = int, default = 100, help = 'The amount of nodes in the random graph (default to 100)')
     parser.add_argument('-i', '--inlets', type = list, default = [], help = 'Labels for inlet pores (random by default)')
     parser.add_argument('-j', '--job-count', type = int, default = job_count, help = 'The amount of jobs to use (default to {})'.format(job_count))
     parser.add_argument('-E', '--exp-data', default = None, help = 'Path to the experimental data')
@@ -453,7 +455,7 @@ if __name__ == '__main__':
 
     if args.generate_network:
         print('Generating an artificial network');
-        pnm.generate(nx.watts_strogatz_graph, 100, 3, 0.2)
+        pnm.generate(nx.watts_strogatz_graph, args.node_count, 3, 0.2)
     elif all([args.exp_data, args.pore_data, args.stats_data]):
         print('Reading the network from data')
         pnm.from_data(args.exp_data, args.pore_data, args.stats_data)
