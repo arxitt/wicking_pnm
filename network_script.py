@@ -145,8 +145,7 @@ class WickingPNM:
         else:
             # double-check if inlet pores are actually in the network
             temp_inlets = deque()
-            if verbose:
-                print('Taking inlets from command-line arguments.')
+            print('Taking inlets from command-line arguments.')
             for inlet in inlets:
                 if inlet in pnm.graph:
                     temp_inlets.append(inlet)
@@ -154,9 +153,7 @@ class WickingPNM:
 
     def generate_inlets(self):
         ninlets = max(int(0.1*len(self.graph.nodes)),6)
-        if verbose:
-            print('Generating {} inlets'.format(ninlets))
-
+        print('Generating {} inlets'.format(ninlets))
         pnm.inlets = np.unique(np.random.choice(self.graph.nodes, ninlets))
 
     def adjacency_matrix(self, label_im):
