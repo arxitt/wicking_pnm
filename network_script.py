@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python3.7
 # -*- coding: utf-8 -*-
 """
 Created on Wed May  6 08:19:34 2020
@@ -90,6 +90,8 @@ class WickingPNM:
             h0e[i] /= 10**np.random.randint(3, 6)
             wt[i] *= 10**np.random.randint(0, 3)
 
+        self.build_inlets()
+
     def from_data(self, exp_data_path, pore_data_path, stats_path):
         stats = WickingPNMStats(stats_path)
 
@@ -134,6 +136,28 @@ class WickingPNM:
 
         # define waiting times
         self.waiting_times = stats.delta_t_025
+        self.build_inlets()
+
+    def build_inlets(self):
+        inlets = np.array(pnm.inlets)
+        if not np.any(inlets):
+            self.generate_inlets()
+        else:
+            # double-check if inlet pores are actually in the network
+            temp_inlets = deque()
+            if verbose:
+                print('Taking inlets from command-line arguments.')
+            for inlet in inlets:
+                if inlet in pnm.graph:
+                    temp_inlets.append(inlet)
+            pnm.inlets = np.array(temp_inlets)
+
+    def generate_inlets(self):
+        ninlets = max(int(0.1*len(self.graph.nodes)),6)
+        if verbose:
+            print('Generating {} inlets'.format(ninlets))
+
+        pnm.inlets = np.unique(np.random.choice(self.graph.nodes, ninlets))
 
     def adjacency_matrix(self, label_im):
         def neighbour_search(label, struct=cube):
@@ -206,7 +230,7 @@ class WickingPNM:
 
             for neighbour in neighbours:
                 if neighbour in layer:
-                    inv_R_eff += 1/np.float64(self.R0[nb] + pnm.R_full[nb])
+                    inv_R_eff += 1/np.float64(self.R0[neighbour] + pnm.R_full[neighbour])
 
             self.R0[node] += 1/inv_R_eff
 
@@ -249,20 +273,6 @@ def simulation(pnm):
     node_ids.sort()
     node_ids = np.array(node_ids)
 
-    num_inlets = max(int(0.1*n),6)
-    inlets = np.array(pnm.inlets)
-    if not np.any(inlets):
-        inlets = np.random.choice(nodes, num_inlets)
-        inlets = np.unique(inlets)
-    temp_lets = []
-    
-    # double-check if inlet pores are actually in the network
-    for inlet in inlets:
-        if inlet in pnm.graph:
-            temp_lets.append(inlet)
-    pnm.inlets = inlets = temp_lets
-    # print(inlets)
-
     # asign a random waiting time to every pore based on the experimental distribution
     if np.any(pnm.waiting_times):       
         ecdf = ECDF(pnm.waiting_times)
@@ -285,7 +295,8 @@ def simulation(pnm):
         r[node_id] = pnm.params['re'][cc]
         h0[node_id] = pnm.params['h0e'][cc]
         cc=cc+1
-    
+
+    inlets = pnm.inlets
     R0[inlets] = pnm.params['R_inlet']
     pnm.R_full = pnm.poiseuille_resistance(h0, r) + R0
 
@@ -367,7 +378,7 @@ def plot(pnm, results):
         plt.figure()
         for result in results:
             plt.plot(result[0], result[1])   
-        plt.title('experimental network')
+        plt.title('Absorbed volume for each run')
         plt.xlabel('time [s]')
         plt.ylabel('volume [m3]')
 
@@ -399,6 +410,7 @@ def plot(pnm, results):
         std_coarse = std[::1000]
 
         # Configure the plot
+        plt.title('Comparison of absorbed volume in multiple runs')
         plt.plot(time_coarse, mean_coarse)#)
         plt.fill_between(time_coarse, mean_coarse-std_coarse, mean_coarse+std_coarse, alpha=0.2)
 
@@ -417,6 +429,7 @@ if __name__ == '__main__':
     parser.add_argument('-c', '--iteration-count', type = int, default = 1, help = 'The amount of times to run the simulation (default to 1)')
     parser.add_argument('-s', '--time-step', type = float, default = 1E-3, help = 'The atomic time step to use throughout the simulation in seconds (default to 0.001)')
     parser.add_argument('-t', '--max-time', type = float, default = 1600, help = 'The amount of time to simulate in seconds (default to 1600)')
+    parser.add_argument('-i', '--inlets', type = list, default = [], help = 'Labels for inlet pores (random by default)')
     parser.add_argument('-j', '--job-count', type = int, default = job_count, help = 'The amount of jobs to use (default to {})'.format(job_count))
     parser.add_argument('-E', '--exp-data', default = None, help = 'Path to the experimental data')
     parser.add_argument('-P', '--pore-data', default = None, help = 'Path to the pore network data')
@@ -439,7 +452,7 @@ if __name__ == '__main__':
     pnm.params['dt'] = args.time_step
     pnm.params['tmax'] = args.max_time
     pnm.params['R_inlet'] = np.int(2E17) #Pas/m3
-    pnm.inlets = [162, 171, 207]
+    pnm.inlets = args.inlets # Previously [162, 171, 207]
 
     if args.generate_network:
         print('Generating an artificial network');
@@ -451,9 +464,10 @@ if __name__ == '__main__':
         raise ValueError('Either -G has to be used, or all of the data paths have to be defined.')
 
     if verbose:
-        print('re', pnm.params['re'])
-        print('h0e', pnm.params['h0e'])
-        print('waiting times', pnm.waiting_times)
+        print('\nre', pnm.params['re'], '\n')
+        print('\nh0e', pnm.params['h0e'], '\n')
+        print('\nwaiting times', pnm.waiting_times, '\n')
+        print('\ninlets', pnm.inlets, '\n')
 
     ### Get simulation results
     I = args.iteration_count
