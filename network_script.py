@@ -1,4 +1,4 @@
-#!/usr/bin/env python3.7
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 Created on Wed May  6 08:19:34 2020
@@ -20,7 +20,7 @@ from statsmodels.distributions.empirical_distribution import ECDF
 from scipy.interpolate import interp1d
 from joblib import Parallel, delayed
 from skimage.morphology import cube
-from collections import deque
+from collections import deque, namedtuple
 
 job_count = 4 # Default job count, 4 should be fine on most systems
 verbose = False
@@ -109,7 +109,58 @@ class WickingPNM:
         # TODO: Find a quicker route to the coo_matrix
         # there is a possible route via scipy.ndimage.find_objects with the benefit of less memory consumption
         print('Getting adjacency matrix for the experimental dataset')
-        matrix = self.adjacency_matrix(label_matrix)
+        # matrix = self.adjacency_matrix(label_matrix)
+
+        slices = sp.ndimage.find_objects(label_matrix)
+        for slice in slices:
+            region = label_matrix[slice]
+            nodes = np.unique(region)
+            (x, y, z) = region.shape
+
+            # Get the parametric surface in euclidian space for each pore
+            surfaces = {}
+            for node in nodes:
+                if node == 0:
+                    continue
+
+                def get_height(i, j):
+                    labels = region[i][j]
+                    unique_labels = np.unique(labels)
+
+                    (hmax, hmin) = (-1, -1) # Outside of the graph
+                    if len(unique_labels) == 1 and unique_labels[0] == 0:
+                        return (hmax, hmin)
+
+                    ## Get maximum and minimum heights for region[i][j]
+                    for k in range(z):
+                        if labels[k] == node:
+                            if hmin == -1:
+                                hmin = k
+                            if k > hmax: 
+                                hmax = k
+
+                    return (hmax, hmin)
+
+                Y, X = np.meshgrid(np.arange(y), np.arange(x))
+                # Parametric dataset for the pore's surface, tuple(max, min)
+                surface = namedtuple('Surface', ['min', 'max'])
+                surface.min = np.ndarray((x, y))
+                surface.max = np.ndarray((x, y))
+                for i in range(x):
+                    for j in range(y):
+                        (max, min) = get_height(i, j)
+                        surface.max[i][j], surface.min[i][j] = max, min
+
+                surfaces[node] = surface
+
+                fig = plt.figure()
+                ax = fig.add_subplot(111, projection = '3d')
+                ax.plot_surface(X, Y, surface.max - surface.min)
+                plt.show()
+
+            # TODO: Compare the surfaces with each other for each slice
+            #       to find neighbouring pores
+
         if verbose:
             print('adjacency matrix', matrix)
 
@@ -356,6 +407,7 @@ def simulation(pnm):
         finished.clear()
 
         time[step] = t
+        # TODO: Stop when the filling slows down meaningfully
         V[step] = pnm.total_volume(h[node_ids], r[node_ids])
         step += 1
         t += dt
@@ -407,9 +459,13 @@ def plot(pnm, results):
         mean_coarse = mean[::1000]
         std_coarse = std[::1000]
 
+        xhalf = np.array(range(1, 1000))
+        yhalf = 1E-7*np.sqrt(xhalf)
+
         # Configure the plot
         plt.title('Comparison of absorbed volume in multiple runs')
-        plt.plot(time_coarse, mean_coarse)#)
+        plt.loglog(time_coarse, mean_coarse)#)
+        plt.loglog(xhalf, yhalf)
         plt.fill_between(time_coarse, mean_coarse-std_coarse, mean_coarse+std_coarse, alpha=0.2)
 
         if pnm.data:
@@ -455,7 +511,7 @@ if __name__ == '__main__':
 
     if args.generate_network:
         print('Generating an artificial network');
-        pnm.generate(nx.watts_strogatz_graph, args.node_count, 3, 0.2)
+        pnm.generate(nx.newman_watts_strogatz_graph, args.node_count, 2, 0.2)
     elif all([args.exp_data, args.pore_data, args.stats_data]):
         print('Reading the network from data')
         pnm.from_data(args.exp_data, args.pore_data, args.stats_data)
