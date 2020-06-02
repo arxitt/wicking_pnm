@@ -106,60 +106,102 @@ class WickingPNM:
             print('labels', labels)
             print('label matrix', label_matrix, label_matrix.shape)
 
-        # TODO: Find a quicker route to the coo_matrix
-        # there is a possible route via scipy.ndimage.find_objects with the benefit of less memory consumption
-        print('Getting adjacency matrix for the experimental dataset')
-        # matrix = self.adjacency_matrix(label_matrix)
-
+        print('Generating the adjacency matrix for the experimental dataset')
+        size = len(label_matrix)
+        matrix = np.zeros((size, size), dtype = np.bool)
         slices = sp.ndimage.find_objects(label_matrix)
-        for slice in slices:
+        # Get the parametric surface in euclidian space for each pore and analyze it
+        def analyze_slice(slice):
             region = label_matrix[slice]
             nodes = np.unique(region)
             (x, y, z) = region.shape
+            # Y, X = np.meshgrid(np.arange(y), np.arange(x)) # for plotting
 
-            # Get the parametric surface in euclidian space for each pore
             surfaces = {}
             for node in nodes:
-                if node == 0:
+                if node == 0 or node in surfaces:
                     continue
 
-                def get_height(i, j):
-                    labels = region[i][j]
-                    unique_labels = np.unique(labels)
-
-                    (hmax, hmin) = (-1, -1) # Outside of the graph
-                    if len(unique_labels) == 1 and unique_labels[0] == 0:
-                        return (hmax, hmin)
-
-                    ## Get maximum and minimum heights for region[i][j]
-                    for k in range(z):
-                        if labels[k] == node:
-                            if hmin == -1:
-                                hmin = k
-                            if k > hmax: 
-                                hmax = k
-
-                    return (hmax, hmin)
-
-                Y, X = np.meshgrid(np.arange(y), np.arange(x))
-                # Parametric dataset for the pore's surface, tuple(max, min)
-                surface = namedtuple('Surface', ['min', 'max'])
-                surface.min = np.ndarray((x, y))
-                surface.max = np.ndarray((x, y))
-                for i in range(x):
-                    for j in range(y):
-                        (max, min) = get_height(i, j)
-                        surface.max[i][j], surface.min[i][j] = max, min
+                # Parametric dataset for the pore's surface
+                surface = namedtuple('Surface', ['min', 'max', 'limits'])
+                surface.min = np.zeros((x, y))
+                surface.max = np.zeros((x, y))
+                surface.limits = {
+                    'xmin': -1,
+                    'xmax': -1,
+                    'ymin': -1,
+                    'ymax': -1,
+                    'zmin': -1,
+                    'zmax': -1,
+                }
 
                 surfaces[node] = surface
 
-                fig = plt.figure()
-                ax = fig.add_subplot(111, projection = '3d')
-                ax.plot_surface(X, Y, surface.max - surface.min)
-                plt.show()
+            if verbose:
+                print('Nodes in region:', surfaces.keys())
 
-            # TODO: Compare the surfaces with each other for each slice
-            #       to find neighbouring pores
+            for i in range(x):
+                for j in range(y):
+                    labels = region[i, j]
+                    unique_labels = np.unique(labels)
+
+                    if len(unique_labels) == 1 and unique_labels[0] == 0:
+                        continue
+
+                    # Get maximum and minimum heights for region[i][j]
+                    for k in range(z):
+                        if labels[k] != 0:
+                            surface = surfaces[labels[k]]
+                            if surface.min[i, j] == -1:
+                                surface.min[i, j] = k
+                            if k > surface.max[i, j]: 
+                                surface.max[i, j] = k
+
+                    for surface in surfaces.values():
+                        if surface.max[i, j] != -1:
+                            limits = surface.limits
+                            min, max = surface.min[i, j], surface.max[i, j]
+                            if limits['xmin'] == -1:
+                                limits['xmin'] = i
+                            if limits['ymin'] == -1:
+                                limits['ymin'] = j
+                            if i > limits['xmax']:
+                                limits['xmax'] = i
+                            if j > limits['ymax']:
+                                limits['ymax'] = j
+                            if limits['zmin'] == -1 or min < limits['zmin']:
+                                limits['zmin'] = surface.min[i, j]
+                            if limits['zmax'] == -1 or max > limits['zmax']:
+                                limits['zmax'] = surface.max[i, j]
+
+            return surfaces
+
+        surfaces_list = Parallel(n_jobs = job_count) \
+            (delayed(analyze_slice)(slice) for slice in slices)
+
+        for surfaces in surfaces_list:
+            visited = {}
+            for (node, surface) in surfaces.items():
+                if verbose:
+                    print(node, surface.limits)
+
+                for (other_node, other_surface) in surfaces.items():
+                    if other_node != node and other_node not in visited:
+                        # TODO: Only do this operation where the surfaces overlap, if they do
+                        delta1 = surface.min - other_surface.max # we're above
+                        delta2 = surface.max - other_surface.min # we're below
+
+                        if verbose:
+                            print('\t', other_node, other_surface.limits)
+
+                        if 1 in delta1 or 1 in delta2:
+                            matrix[node, other_node] = True
+                            matrix[other_node, node] = True
+
+                            if verbose:
+                                print('\t' + str(node) + ' connects to ' + str(other_node) + '.')
+
+                visited[node] = True
 
         if verbose:
             print('adjacency matrix', matrix)
@@ -207,37 +249,6 @@ class WickingPNM:
         ninlets = max(int(0.1*len(self.graph.nodes)),6)
         print('Generating {} inlets'.format(ninlets))
         pnm.inlets = np.unique(np.random.choice(self.graph.nodes, ninlets))
-
-    def adjacency_matrix(self, label_im):
-        def neighbour_search(label, struct=cube):
-            mask = label_im==label
-            mask = sp.ndimage.binary_dilation(input = mask, structure = struct(3))
-            neighbours = np.unique(label_im[mask])[1:]
-
-            # A node can't be its own neighbour
-            neighbours = neighbours[np.where(neighbours != label)]
-
-            return neighbours
-
-        size = len(label_im)
-        labels = np.unique(label_im[1:])
-        matrix = np.zeros([size,size], dtype=np.bool)
-
-        results = Parallel(n_jobs=job_count)(delayed(neighbour_search)(label) for label in labels)
-
-        if verbose:
-            print('\nFilling matrix')
-        for (label, result) in zip(labels, results):
-            if verbose:
-                print('label', label)
-                print('neighbours', result, '\n')
-
-            matrix[label, result] = True
-
-        # make sure that matrix is symmetric (as it should be)
-        matrix = np.maximum(matrix, matrix.transpose())
-
-        return matrix
 
     """
     find your path through the filled network to calculate the inlet
