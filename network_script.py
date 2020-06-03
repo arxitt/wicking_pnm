@@ -117,6 +117,9 @@ class WickingPNM:
             (x, y, z) = region.shape
             # Y, X = np.meshgrid(np.arange(y), np.arange(x)) # for plotting
 
+            if len(nodes) <= 2:
+                return {}
+
             surfaces = {}
             for node in nodes:
                 if node == 0 or node in surfaces:
@@ -149,6 +152,7 @@ class WickingPNM:
                         continue
 
                     # Get maximum and minimum heights for region[i][j]
+                    # TODO: Find this faster
                     for k in range(z):
                         if labels[k] != 0:
                             surface = surfaces[labels[k]]
@@ -179,6 +183,22 @@ class WickingPNM:
         surfaces_list = Parallel(n_jobs = job_count) \
             (delayed(analyze_slice)(slice) for slice in slices)
 
+        def overlapping_region(surface1, surface2):
+            limits1, limits2 = surface1.limits, surface2.limits
+            xmin = max(limits1['xmin'], limits2['xmin'])
+            xmax = min(limits1['xmax'], limits2['xmax'])
+            ymin = max(limits1['ymin'], limits2['ymin'])
+            ymax = min(limits1['ymax'], limits2['ymax'])
+
+            if xmin > xmax or ymin > ymax:
+                return None
+
+            return (xmin, xmax, ymin, ymax)
+
+        def is_above(surface1, surface2):
+            # Not necessarily true. Use center of mass instead?
+            return surface1.limits['zmax'] > surface2.limits['zmax']
+
         for surfaces in surfaces_list:
             visited = {}
             for (node, surface) in surfaces.items():
@@ -187,19 +207,26 @@ class WickingPNM:
 
                 for (other_node, other_surface) in surfaces.items():
                     if other_node != node and other_node not in visited:
-                        # TODO: Only do this operation where the surfaces overlap, if they do
-                        delta1 = surface.min - other_surface.max # we're above
-                        delta2 = surface.max - other_surface.min # we're below
+                        olr = overlapping_region(surface, other_surface)
+                        if olr is None:
+                            continue
+
+                        xmin, xmax, ymin, ymax = olr
+
+                        if is_above(surface, other_surface):
+                            delta = surface.min[xmin:xmax, ymin:ymax] - other_surface.max[xmin:xmax, ymin:ymax]
+                        else:
+                            delta = surface.max[xmin:xmax, ymin:ymax] - other_surface.min[xmin:xmax, ymin:ymax]
 
                         if verbose:
                             print('\t', other_node, other_surface.limits)
 
-                        if 1 in delta1 or 1 in delta2:
+                        if 1 in delta:
                             matrix[node, other_node] = True
                             matrix[other_node, node] = True
 
                             if verbose:
-                                print('\t' + str(node) + ' connects to ' + str(other_node) + '.')
+                                print('\t {} connects to {}.'.format(other_node, node))
 
                 visited[node] = True
 
@@ -233,7 +260,7 @@ class WickingPNM:
         self.build_inlets()
 
     def build_inlets(self):
-        inlets = np.array(pnm.inlets)
+        inlets = np.array(pnm.inlets, dtype = np.int)
         if not np.any(inlets):
             self.generate_inlets()
         else:
@@ -475,8 +502,7 @@ def plot(pnm, results):
 
         # Configure the plot
         plt.title('Comparison of absorbed volume in multiple runs')
-        plt.loglog(time_coarse, mean_coarse)#)
-        plt.loglog(xhalf, yhalf)
+        plt.plot(time_coarse, mean_coarse)
         plt.fill_between(time_coarse, mean_coarse-std_coarse, mean_coarse+std_coarse, alpha=0.2)
 
         if pnm.data:
@@ -495,7 +521,7 @@ if __name__ == '__main__':
     parser.add_argument('-s', '--time-step', type = float, default = 1E-3, help = 'The atomic time step to use throughout the simulation in seconds (default to 0.001)')
     parser.add_argument('-t', '--max-time', type = float, default = 1600, help = 'The amount of time to simulate in seconds (default to 1600)')
     parser.add_argument('-n', '--node-count', type = int, default = 100, help = 'The amount of nodes in the random graph (default to 100)')
-    parser.add_argument('-i', '--inlets', type = list, default = [], help = 'Labels for inlet pores (random by default)')
+    parser.add_argument('-i', '--inlets', type = str, default = '', help = 'Labels for inlet pores (random by default)')
     parser.add_argument('-j', '--job-count', type = int, default = job_count, help = 'The amount of jobs to use (default to {})'.format(job_count))
     parser.add_argument('-E', '--exp-data', default = None, help = 'Path to the experimental data')
     parser.add_argument('-P', '--pore-data', default = None, help = 'Path to the pore network data')
@@ -518,7 +544,12 @@ if __name__ == '__main__':
     pnm.params['dt'] = args.time_step
     pnm.params['tmax'] = args.max_time
     pnm.params['R_inlet'] = np.int(2E17) #Pas/m3
-    pnm.inlets = args.inlets # Previously [162, 171, 207]
+    pnm.inlets = args.inlets.split(',') # Previously [162, 171, 207]
+    if '' in pnm.inlets:
+        pnm.inlets = []
+    else:
+        for inlet in pnm.inlets:
+            inlet = int(inlet)
 
     if args.generate_network:
         print('Generating an artificial network');
