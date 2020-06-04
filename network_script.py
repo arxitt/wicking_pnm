@@ -159,8 +159,8 @@ class WickingPNM:
                         surface = surfaces[label]
                         indices = np.argwhere(labels == label)
                         if indices.min() != indices.max():
-                            surface.min[i, j] = indices.min()
-                            surface.max[i, j] = indices.max()
+                            surface.min[i, j] = indices[0]
+                            surface.max[i, j] = indices[-1]
 
                         if surface.max[i, j] != -1:
                             limits = surface.limits
