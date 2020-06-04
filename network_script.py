@@ -152,16 +152,16 @@ class WickingPNM:
                         continue
 
                     # Get maximum and minimum heights for region[i][j]
-                    # TODO: Find this faster
-                    for k in range(z):
-                        if labels[k] != 0:
-                            surface = surfaces[labels[k]]
-                            if surface.min[i, j] == -1:
-                                surface.min[i, j] = k
-                            if k > surface.max[i, j]: 
-                                surface.max[i, j] = k
+                    for label in unique_labels:
+                        if label == 0:
+                            continue
 
-                    for surface in surfaces.values():
+                        surface = surfaces[label]
+                        indices = np.argwhere(labels == label)
+                        if indices.min() != indices.max():
+                            surface.min[i, j] = indices.min()
+                            surface.max[i, j] = indices.max()
+
                         if surface.max[i, j] != -1:
                             limits = surface.limits
                             min, max = surface.min[i, j], surface.max[i, j]
@@ -218,9 +218,14 @@ class WickingPNM:
                         else:
                             delta = surface.max[xmin:xmax, ymin:ymax] - other_surface.min[xmin:xmax, ymin:ymax]
 
-                        if verbose:
-                            print('\t', other_node, other_surface.limits)
+                        # if verbose:
+                            # print('\t', other_node, other_surface.limits)
 
+                        # Currently, we're only checking if there are pores
+                        # directly above or below this one. It could always
+                        # work, if the resolution of the image is high enough,
+                        # but in the future I'd like to check in the direction
+                        # of the other pore, just to be sure.
                         if 1 in delta:
                             matrix[node, other_node] = True
                             matrix[other_node, node] = True
