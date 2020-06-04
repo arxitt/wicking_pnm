@@ -174,9 +174,9 @@ class WickingPNM:
                             if j > limits['ymax']:
                                 limits['ymax'] = j
                             if limits['zmin'] == -1 or min < limits['zmin']:
-                                limits['zmin'] = surface.min[i, j]
+                                limits['zmin'] = min
                             if limits['zmax'] == -1 or max > limits['zmax']:
-                                limits['zmax'] = surface.max[i, j]
+                                limits['zmax'] = max
 
             return surfaces
 
@@ -217,9 +217,6 @@ class WickingPNM:
                             delta = surface.min[xmin:xmax, ymin:ymax] - other_surface.max[xmin:xmax, ymin:ymax]
                         else:
                             delta = surface.max[xmin:xmax, ymin:ymax] - other_surface.min[xmin:xmax, ymin:ymax]
-
-                        # if verbose:
-                            # print('\t', other_node, other_surface.limits)
 
                         # Currently, we're only checking if there are pores
                         # directly above or below this one. It could always
