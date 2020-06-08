@@ -455,11 +455,19 @@ def simulation(pnm):
     return [time, V]
 
 def plot(pnm, results):
-    def plot_simulation_logarithmic():
-        for result in results:
-            plt.loglog(result[0], result[1])   
+    xsqrt = np.arange(1, pnm.params['tmax'])
+    ysqrt = 2E-12*np.sqrt(xsqrt)
+    line_alpha = 1 if len(results) < 10 else 0.5
+    sqrt_col = 'chartreuse'
 
-        plt.title('simulation results')
+    def plot_simulation_logarithmic():
+        plt.figure()
+        for result in results:
+            plt.loglog(result[0], result[1], alpha = 0.4)
+
+        plt.loglog(xsqrt, ysqrt, dashes = (5, 5), color = sqrt_col, alpha = 1)
+
+        plt.title('Absorbed volume for each run (logarithmic)')
         plt.xlabel('time [s]')
         plt.ylabel('volume [m3]')
         plt.xlim(0.1,pnm.params['tmax'])
@@ -467,7 +475,9 @@ def plot(pnm, results):
     def plot_simulation():
         plt.figure()
         for result in results:
-            plt.plot(result[0], result[1])   
+            plt.plot(result[0], result[1], alpha = 0.4)
+
+        plt.plot(xsqrt, ysqrt, dashes = (5, 5), color = sqrt_col, alpha = 1)
         plt.title('Absorbed volume for each run')
         plt.xlabel('time [s]')
         plt.ylabel('volume [m3]')
@@ -480,7 +490,7 @@ def plot(pnm, results):
             Qmax = np.max([Qmax, Q[5:].max()])
             plt.plot(result[0], np.gradient(result[1]))
     
-        plt.title('experimental network')
+        plt.title('Flux through the pore network')
         plt.xlabel('time [s]')
         plt.ylabel('flux [m3/s]')
         plt.ylim(0, Qmax)
@@ -503,14 +513,17 @@ def plot(pnm, results):
         yhalf = 1E-7*np.sqrt(xhalf)
 
         # Configure the plot
-        plt.title('Comparison of absorbed volume in multiple runs')
         plt.plot(time_coarse, mean_coarse)
+        plt.plot(xsqrt, ysqrt, dashes = (5, 5), color = sqrt_col, alpha = 1)
         plt.fill_between(time_coarse, mean_coarse-std_coarse, mean_coarse+std_coarse, alpha=0.2)
 
         if pnm.data:
             (pnm.data['volume'].sum(axis = 0)*vxm3).plot(color='k')
 
+        plt.title('Comparison between the absorbed volume and the experimental data')
+
     plot_simulation()
+    plot_simulation_logarithmic()
     plot_comparison()
     plt.show()
 
