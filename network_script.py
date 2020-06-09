@@ -59,6 +59,9 @@ class WickingPNM:
         self.R_full = None # resistances when full
         self.R_inlet = 0 # inlet resistance
 
+        self.randomize_waiting_times = False
+        self.waiting_times_data = None
+
         self.params = {
             # General physical constants (material-dependent)
             'eta': 1, # (mPa*s) dynamic viscosity of water
@@ -83,15 +86,45 @@ class WickingPNM:
 
         re = self.params['re'] = np.random.rand(size)
         h0e = self.params['h0e'] = np.random.rand(size)
-        wt = self.waiting_times = np.random.rand(size)
 
         # re and h0e are on a scale of 1E-6 to 1E-3, waiting times from 1 to 1000
         for i in range(size):
             re[i] /= 10**np.random.randint(3, 6)
             h0e[i] /= 10**np.random.randint(3, 6)
-            wt[i] *= 10**np.random.randint(0, 3)
 
         self.build_inlets()
+        self.generate_waiting_times()
+
+    def adjacency_matrix(self, label_im):
+        def neighbour_search(label, struct=cube):
+            mask = label_im==label
+            mask = sp.ndimage.binary_dilation(input = mask, structure = struct(3))
+            neighbours = np.unique(label_im[mask])[1:]
+
+            # A node can't be its own neighbour
+            neighbours = neighbours[np.where(neighbours != label)]
+
+            return neighbours
+
+        size = len(label_im)
+        labels = np.unique(label_im[1:])
+        matrix = np.zeros([size,size], dtype=np.bool)
+
+        results = Parallel(n_jobs=job_count)(delayed(neighbour_search)(label) for label in labels)
+
+        if verbose:
+            print('\nFilling matrix')
+        for (label, result) in zip(labels, results):
+            if verbose:
+                print('label', label)
+                print('neighbours', result, '\n')
+
+            matrix[label, result] = True
+
+        # make sure that matrix is symmetric (as it should be)
+        matrix = np.maximum(matrix, matrix.transpose())
+
+        return matrix
 
     def from_data(self, exp_data_path, pore_data_path, stats_path):
         stats = WickingPNMStats(stats_path)
@@ -158,7 +191,7 @@ class WickingPNM:
 
                         surface = surfaces[label]
                         indices = np.argwhere(labels == label)
-                        if indices.min() != indices.max():
+                        if indices[0] != indices[-1]:
                             surface.min[i, j] = indices[0]
                             surface.max[i, j] = indices[-1]
 
@@ -235,14 +268,27 @@ class WickingPNM:
         if verbose:
             print('adjacency matrix', matrix)
 
+        matrix2 = self.adjacency_matrix(label_matrix)
+
         # remove diagonal entries (self-loops)
         matrix[np.where(np.diag(np.ones(matrix.shape[0], dtype=np.bool)))] = False
+        matrix2[np.where(np.diag(np.ones(matrix.shape[0], dtype=np.bool)))] = False
 
         # remove irrelevant/noisy labels, pores that are just a few pixels large
         mask = np.ones(matrix.shape[0], np.bool)
         mask[labels] = False
         matrix[mask,:] = False
         matrix[:,mask] = False
+        matrix2[mask,:] = False
+        matrix2[:,mask] = False
+
+        ## TODO: Verify which are right and why they might be wrong
+        print('Matrices are not equal:')
+        where = np.where(matrix != matrix2)
+        for i in range(len(where[0])):
+            node1, node2 = where[0][i], where[1][i]
+            print('Connection {}-{}: matrix1 = {}, matrix2 = {}'
+                  .format(node1, node2, matrix[node1, node2], matrix2[node1, node2]))
 
         # fill networkx graph object
         coo_matrix = sp.sparse.coo_matrix(matrix)
@@ -258,13 +304,28 @@ class WickingPNM:
         self.params['h0e'] = px*pore['value_properties'].sel(property = 'major_axis').data
 
         # define waiting times
-        self.waiting_times = stats.delta_t_025
+        self.waiting_times_data = stats.delta_t_all
+        self.generate_waiting_times()
         self.build_inlets()
 
-    def build_inlets(self):
+    def generate_waiting_times(self):
+        size = np.array(self.graph.nodes).max() + 1
+        data = self.waiting_times_data
+
+        if data is not None and len(data) > 0:
+        # assign a random waiting time to every pore based on the experimental distribution
+            ecdf = ECDF(data)
+            func = interp1d(ecdf.y[1:], ecdf.x[1:], fill_value = 'extrapolate')
+            self.waiting_times = func(np.random.rand(size))
+        else:
+            wt = self.waiting_times = np.random.rand(size)
+            for i in range(graph_size):
+                wt[i] *= 10**np.random.randint(0, 3)
+
+    def build_inlets(self, amount = 5):
         inlets = np.array(pnm.inlets, dtype = np.int)
         if not np.any(inlets):
-            self.generate_inlets()
+            self.generate_inlets(amount)
         else:
             # double-check if inlet pores are actually in the network
             temp_inlets = deque()
@@ -274,10 +335,10 @@ class WickingPNM:
                     temp_inlets.append(inlet)
             pnm.inlets = np.array(temp_inlets)
 
-    def generate_inlets(self):
-        ninlets = max(int(0.1*len(self.graph.nodes)),6)
-        print('Generating {} inlets'.format(ninlets))
-        pnm.inlets = np.unique(np.random.choice(self.graph.nodes, ninlets))
+    # TODO: Change this to start with one random inlet and some amount of distant neighbours
+    def generate_inlets(self, amount):
+        print('Generating {} inlets'.format(amount))
+        pnm.inlets = np.unique(np.random.choice(self.graph.nodes, amount))
 
     """
     find your path through the filled network to calculate the inlet
@@ -300,7 +361,7 @@ class WickingPNM:
 
         return self.outlet_resistances_r(filled_inlets)
 
-    # this function recursively should calculate the effective inlet resistance
+    # this function recursivelself.waiting_times ould calculate the effective inlet resistance
     # for every pore with the same distance (layer) to the network inlet
     def outlet_resistances_r(self, layer, visited = {}):
         if len(layer) == 0:
@@ -362,13 +423,9 @@ def simulation(pnm):
     node_ids.sort()
     node_ids = np.array(node_ids)
 
-    # asign a random waiting time to every pore based on the experimental distribution
-    if np.any(pnm.waiting_times):       
-        ecdf = ECDF(pnm.waiting_times)
-        f = interp1d(ecdf.y[1:], ecdf.x[1:], fill_value = 'extrapolate')
-        prob = np.random.rand(n_init)
-        t_w = f(prob)
-    #t_w = t_w*0
+    # Generate_waiting_times will build new waiting times with the ECDF distribution
+    if pnm.randomize_waiting_times:
+        pnm.generate_waiting_times()
 
     # create new pore property arrays where the pore label corresponds to the array index
     # this copuld be solved more elegantly with xarray, but the intention was that it works
@@ -408,6 +465,7 @@ def simulation(pnm):
     step = 0
     time = np.zeros(np.int(np.ceil(tmax/dt)))
     V = pnm.V = np.zeros(len(time))
+    t_w = pnm.waiting_times
     while t <= tmax:
         # first check, which pores are currently getting filled (active)
         if len(newly_active) != 0:
@@ -460,24 +518,28 @@ def plot(pnm, results):
     line_alpha = 1 if len(results) < 10 else 0.5
     sqrt_col = 'chartreuse'
 
-    def plot_simulation_logarithmic():
+    def plot_simulation_logarithmic(plot_sqrt = False):
+        alpha = 0.4 if plot_sqrt else 1
         plt.figure()
         for result in results:
-            plt.loglog(result[0], result[1], alpha = 0.4)
+            plt.loglog(result[0], result[1], alpha = alpha)
 
-        plt.loglog(xsqrt, ysqrt, dashes = (5, 5), color = sqrt_col, alpha = 1)
+        if plot_sqrt:
+            plt.loglog(xsqrt, ysqrt, dashes = (5, 5), color = sqrt_col, alpha = 1)
 
         plt.title('Absorbed volume for each run (logarithmic)')
         plt.xlabel('time [s]')
         plt.ylabel('volume [m3]')
         plt.xlim(0.1,pnm.params['tmax'])
 
-    def plot_simulation():
+    def plot_simulation(plot_sqrt = False):
+        alpha = 0.4 if plot_sqrt else 1
         plt.figure()
         for result in results:
-            plt.plot(result[0], result[1], alpha = 0.4)
+            plt.plot(result[0], result[1], alpha = alpha)
 
-        plt.plot(xsqrt, ysqrt, dashes = (5, 5), color = sqrt_col, alpha = 1)
+        if plot_sqrt:
+            plt.plot(xsqrt, ysqrt, dashes = (5, 5), color = sqrt_col, alpha = 1)
         plt.title('Absorbed volume for each run')
         plt.xlabel('time [s]')
         plt.ylabel('volume [m3]')
@@ -495,7 +557,7 @@ def plot(pnm, results):
         plt.ylabel('flux [m3/s]')
         plt.ylim(0, Qmax)
 
-    def plot_comparison():
+    def plot_comparison(plot_sqrt = False):
         # compare to experimental data
         plt.figure()
         vxm3 = pnm.params['px']**3
@@ -503,28 +565,28 @@ def plot(pnm, results):
         std = test[:,1,:].std(axis=0)
         mean = test[:,1,:].mean(axis=0)
         time_line = test[0,0,:]
+        alpha = 0.2 if plot_sqrt else 1
 
         # Configure the axes
         time_coarse = time_line[::1000]
         mean_coarse = mean[::1000]
         std_coarse = std[::1000]
 
-        xhalf = np.array(range(1, 1000))
-        yhalf = 1E-7*np.sqrt(xhalf)
-
         # Configure the plot
         plt.plot(time_coarse, mean_coarse)
-        plt.plot(xsqrt, ysqrt, dashes = (5, 5), color = sqrt_col, alpha = 1)
-        plt.fill_between(time_coarse, mean_coarse-std_coarse, mean_coarse+std_coarse, alpha=0.2)
+        plt.fill_between(time_coarse, mean_coarse-std_coarse, mean_coarse+std_coarse, alpha = alpha)
+
+        if plot_sqrt:
+            plt.plot(xsqrt, ysqrt, dashes = (5, 5), color = sqrt_col, alpha = 1)
 
         if pnm.data:
             (pnm.data['volume'].sum(axis = 0)*vxm3).plot(color='k')
 
         plt.title('Comparison between the absorbed volume and the experimental data')
 
-    plot_simulation()
-    plot_simulation_logarithmic()
-    plot_comparison()
+    plot_comparison(True)
+    plot_simulation(True)
+    plot_simulation_logarithmic(True)
     plt.show()
 
 if __name__ == '__main__':
@@ -592,6 +654,7 @@ if __name__ == '__main__':
     else:
         njobs = min(I, job_count)
         print('Starting the simulation with a timestep of {}s for {} times with {} jobs.'.format(args.time_step, I, njobs))
+        pnm.randomize_waiting_times = True
         results = Parallel(n_jobs=njobs)(delayed(simulation)(pnm) for i in range(I))
 
     if not args.no_plot:
