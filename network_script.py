@@ -313,7 +313,7 @@ class WickingPNM:
         data = self.waiting_times_data
 
         if data is not None and len(data) > 0:
-        # assign a random waiting time to every pore based on the experimental distribution
+            # assign a random waiting time to every pore based on the experimental distribution
             ecdf = ECDF(data)
             func = interp1d(ecdf.y[1:], ecdf.x[1:], fill_value = 'extrapolate')
             self.waiting_times = func(np.random.rand(size))
