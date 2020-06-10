@@ -148,7 +148,7 @@ class WickingPNM:
             region = label_matrix[slice]
             nodes = np.unique(region)
             (x, y, z) = region.shape
-            # Y, X = np.meshgrid(np.arange(y), np.arange(x)) # for plotting
+            Y, X = np.meshgrid(np.arange(y), np.arange(x)) # for plotting
 
             if len(nodes) <= 2:
                 return {}
@@ -309,7 +309,7 @@ class WickingPNM:
         self.build_inlets()
 
     def generate_waiting_times(self):
-        size = np.array(self.graph.nodes).max() + 1
+        size = np.array(np.unique(self.graph.nodes)).max() + 1
         data = self.waiting_times_data
 
         if data is not None and len(data) > 0:
@@ -319,7 +319,7 @@ class WickingPNM:
             self.waiting_times = func(np.random.rand(size))
         else:
             wt = self.waiting_times = np.random.rand(size)
-            for i in range(graph_size):
+            for i in range(size):
                 wt[i] *= 10**np.random.randint(0, 3)
 
     def build_inlets(self, amount = 5):
@@ -338,7 +338,7 @@ class WickingPNM:
     # TODO: Change this to start with one random inlet and some amount of distant neighbours
     def generate_inlets(self, amount):
         print('Generating {} inlets'.format(amount))
-        pnm.inlets = np.unique(np.random.choice(self.graph.nodes, amount))
+        pnm.inlets = np.unique(np.random.choice(np.unique(self.graph.nodes), amount))
 
     """
     find your path through the filled network to calculate the inlet
@@ -512,13 +512,15 @@ def simulation(pnm):
 
     return [time, V]
 
-def plot(pnm, results):
-    xsqrt = np.arange(1, pnm.params['tmax'])
-    ysqrt = 2E-12*np.sqrt(xsqrt)
-    line_alpha = 1 if len(results) < 10 else 0.5
-    sqrt_col = 'chartreuse'
+def plot(pnm, results, sqrt_factor = 0):
+    plot_sqrt = sqrt_factor > 0
+    if plot_sqrt:
+        xsqrt = np.arange(1, pnm.params['tmax'])
+        ysqrt = sqrt_factor*np.sqrt(xsqrt)
+        line_alpha = 1 if len(results) < 10 else 0.5
+        sqrt_col = 'chartreuse'
 
-    def plot_simulation_logarithmic(plot_sqrt = False):
+    def plot_simulation_logarithmic():
         alpha = 0.4 if plot_sqrt else 1
         plt.figure()
         for result in results:
@@ -532,7 +534,7 @@ def plot(pnm, results):
         plt.ylabel('volume [m3]')
         plt.xlim(0.1,pnm.params['tmax'])
 
-    def plot_simulation(plot_sqrt = False):
+    def plot_simulation():
         alpha = 0.4 if plot_sqrt else 1
         plt.figure()
         for result in results:
@@ -557,7 +559,7 @@ def plot(pnm, results):
         plt.ylabel('flux [m3/s]')
         plt.ylim(0, Qmax)
 
-    def plot_comparison(plot_sqrt = False):
+    def plot_comparison():
         # compare to experimental data
         plt.figure()
         vxm3 = pnm.params['px']**3
@@ -584,9 +586,9 @@ def plot(pnm, results):
 
         plt.title('Comparison between the absorbed volume and the experimental data')
 
-    plot_comparison(True)
-    plot_simulation(True)
-    plot_simulation_logarithmic(True)
+    # plot_comparison()
+    plot_simulation()
+    # plot_simulation_logarithmic()
     plt.show()
 
 if __name__ == '__main__':
@@ -594,6 +596,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description = 'Simulation parameters')
     parser.add_argument('-v', '--verbose', action = 'store_true', help = 'Be verbose during the simulation')
     parser.add_argument('-G', '--generate-network', action = 'store_true', help = 'Generate an artificial pore network model and ignore -E, -P and -S')
+    parser.add_argument('-f', '--sqrt-factor', type = float, default = 0, help = 'Show a square with the given factor with the plots')
     parser.add_argument('-c', '--iteration-count', type = int, default = 1, help = 'The amount of times to run the simulation (default to 1)')
     parser.add_argument('-s', '--time-step', type = float, default = 1E-3, help = 'The atomic time step to use throughout the simulation in seconds (default to 0.001)')
     parser.add_argument('-t', '--max-time', type = float, default = 1600, help = 'The amount of time to simulate in seconds (default to 1600)')
@@ -630,7 +633,7 @@ if __name__ == '__main__':
 
     if args.generate_network:
         print('Generating an artificial network');
-        pnm.generate(nx.newman_watts_strogatz_graph, args.node_count, 2, 0.2)
+        pnm.generate(nx.random_regular_graph, 4, args.node_count)
     elif all([args.exp_data, args.pore_data, args.stats_data]):
         print('Reading the network from data')
         pnm.from_data(args.exp_data, args.pore_data, args.stats_data)
@@ -658,4 +661,4 @@ if __name__ == '__main__':
         results = Parallel(n_jobs=njobs)(delayed(simulation)(pnm) for i in range(I))
 
     if not args.no_plot:
-        plot(pnm, results)
+        plot(pnm, results, args.sqrt_factor)
