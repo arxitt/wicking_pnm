@@ -19,8 +19,9 @@ import multiprocessing as mp
 from statsmodels.distributions.empirical_distribution import ECDF
 from scipy.interpolate import interp1d
 from joblib import Parallel, delayed
-from skimage.morphology import cube
 from collections import deque, namedtuple
+from skimage import measure
+from skimage.morphology import cube
 
 job_count = 4 # Default job count, 4 should be fine on most systems
 verbose = False
@@ -95,36 +96,118 @@ class WickingPNM:
         self.build_inlets()
         self.generate_waiting_times()
 
-    def adjacency_matrix(self, label_im):
-        def neighbour_search(label, struct=cube):
-            mask = label_im==label
-            mask = sp.ndimage.binary_dilation(input = mask, structure = struct(3))
-            neighbours = np.unique(label_im[mask])[1:]
+    def extract_throat_list(self, label_matrix, labels, dt = None): 
+        """
+        inspired by Jeff Gostick's GETNET
 
-            # A node can't be its own neighbour
-            neighbours = neighbours[np.where(neighbours != label)]
+        extracts a list of directed throats connecting pores i->j including a few throat parameters
+        undirected network i-j needs to be calculated in a second step
+        """
 
-            return neighbours
+        def extend_bounding_box(s, shape, pad=3):
+            a = []
+            for i, dim in zip(s, shape):
+                start = 0
+                stop = dim
 
-        size = len(label_im)
-        labels = np.unique(label_im[1:])
-        matrix = np.zeros([size,size], dtype=np.bool)
+                if i.start - pad >= 0:
+                    start = i.start - pad
+                if i.stop + pad < dim:
+                    stop = i.stop + pad
 
-        results = Parallel(n_jobs=job_count)(delayed(neighbour_search)(label) for label in labels)
+                a.append(slice(start, stop, None))
 
-        if verbose:
-            print('\nFilling matrix')
-        for (label, result) in zip(labels, results):
-            if verbose:
-                print('label', label)
-                print('neighbours', result, '\n')
+            return a
 
-            matrix[label, result] = True
+        parameters = ['pore_1', 'pore_2', 'index',
+                      'x_extent', 'y_extent', 'z_extent',
+                      'inscribed_radius', 'perimeter', 'area',
+                      'shape_factor', 'X', 'Y', 'Z',
+                      'major_axis', 'minor_axis', 'aspect_ratio']
+        throat_parameters = namedtuple('ThroatParameters', parameters)
+        def label_function(struct, pore_object, sub_dt, bounding_box, label):
+            pore_im = pore_object == label
+            im_w_throats = sp.ndimage.binary_dilation(input = pore_im, structure = struct(3))
+            im_w_throats = im_w_throats*pore_object
+            n_labels = np.unique(im_w_throats)[1:]
+            t_params = deque()
+            for n_label in n_labels: # check neighbor labels for connections, later take the mean of the
+                                     # property of throat A->B and B->A as throat property A-B
+                if n_label == label: continue
+                # FIXME: what about multiple connections between two pores --> do a find objects and then make them as extra throats
+                # what about inverse throats? can you match them again? maybe via position (com) --> seems to be fixed
+                throat_im = (im_w_throats == n_label).astype(np.uint8)
+                throat_im = measure.label(throat_im, connectivity=3)
+                throat_props = measure.regionprops(throat_im)
 
-        # make sure that matrix is symmetric (as it should be)
-        matrix = np.maximum(matrix, matrix.transpose())
+                for prop in throat_props:
+                    x_extent, y_extent, z_extent = prop.image.shape
+                    conn = (label, n_label)
+                    throat = np.where(prop.image)
+                    rad_inscribed = sub_dt[throat].max()
+                    area, perimeter = prop.area, np.count_nonzero(sub_dt[throat] < 2)
+                    if perimeter > 0:
+                        shape_factor = area/perimeter**2
+                    else:
+                        shape_factor = 0
 
-        return matrix
+                    com = sp.ndimage.measurements.center_of_mass(prop.image)
+                    com += np.array([bounding_box[0].start, bounding_box[1].start, bounding_box[2].start]) 
+
+                    inertia_tensor = measure._moments.inertia_tensor(prop.image)
+                    in_tens_eig = np.linalg.eigvalsh(inertia_tensor)
+
+                    major_axis = 4*np.sqrt(np.abs(in_tens_eig[-1]))
+                    minor_axis = 4*np.sqrt(np.abs(in_tens_eig[0]))
+
+                    aspect_ratio = major_axis/minor_axis
+
+                    t_param = throat_parameters(
+                        conn[0], conn[1], 0, x_extent, y_extent,
+                        z_extent, rad_inscribed, perimeter, area,
+                        shape_factor, com[0], com[1], com[2],
+                        major_axis, minor_axis, aspect_ratio
+                    )
+
+                    t_params.append(t_param)
+
+            return np.array(t_params)
+
+        im = label_matrix
+
+        struct = cube # FIXME: ball does not work as you would think (anisotropic expansion)
+        if im.ndim == 2:
+            struct = disk
+
+        if dt == None:
+            dt = sp.ndimage.distance_transform_edt(im>0)
+
+        crude_pores = sp.ndimage.find_objects(im)
+        # throw out None-entries (counterintuitive behavior of find_objects)
+        pores = []
+        for pore in crude_pores:
+            if not pore == None:
+                pores.append(pore)
+        crude_pores = None
+
+        shape = im.shape
+        bounding_boxes = []
+        for pore in pores:
+            bounding_boxes.append(extend_bounding_box(pore, shape))
+
+        t_params_raw = Parallel(n_jobs = job_count, backend = 'threading')(
+            delayed(label_function)\
+                (struct, im[bounding_box], dt[bounding_box], bounding_box, label) \
+                for (bounding_box, label) in zip(bounding_boxes, labels)
+        )
+
+        # clear out empty objects
+        t_params = []
+        for param in t_params_raw:
+            if len(param) > 0:
+                t_params.append(param)
+
+        return np.concatenate(t_params, axis = 0)
 
     def from_data(self, exp_data_path, pore_data_path, stats_path):
         stats = WickingPNMStats(stats_path)
@@ -140,168 +223,12 @@ class WickingPNM:
             print('label matrix', label_matrix, label_matrix.shape)
 
         print('Generating the adjacency matrix for the experimental dataset')
-        size = len(label_matrix)
-        matrix = np.zeros((size, size), dtype = np.bool)
-        slices = sp.ndimage.find_objects(label_matrix)
-        # Get the parametric surface in euclidian space for each pore and analyze it
-        def analyze_slice(slice):
-            region = label_matrix[slice]
-            nodes = np.unique(region)
-            (x, y, z) = region.shape
-            Y, X = np.meshgrid(np.arange(y), np.arange(x)) # for plotting
+        throats = self.extract_throat_list(label_matrix, labels)
 
-            if len(nodes) <= 2:
-                return {}
-
-            surfaces = {}
-            for node in nodes:
-                if node == 0 or node in surfaces:
-                    continue
-
-                # Parametric dataset for the pore's surface
-                surface = namedtuple('Surface', ['min', 'max', 'limits'])
-                surface.min = np.zeros((x, y))
-                surface.max = np.zeros((x, y))
-                surface.limits = {
-                    'xmin': -1,
-                    'xmax': -1,
-                    'ymin': -1,
-                    'ymax': -1,
-                    'zmin': -1,
-                    'zmax': -1,
-                }
-
-                surfaces[node] = surface
-
-            if verbose:
-                print('Nodes in region:', surfaces.keys())
-
-            for i in range(x):
-                for j in range(y):
-                    labels = region[i, j]
-                    unique_labels = np.unique(labels)
-
-                    if len(unique_labels) == 1 and unique_labels[0] == 0:
-                        continue
-
-                    # Get maximum and minimum heights for region[i][j]
-                    for label in unique_labels:
-                        if label == 0:
-                            continue
-
-                        surface = surfaces[label]
-                        indices = np.argwhere(labels == label)
-                        if indices[0] != indices[-1]:
-                            surface.min[i, j] = indices[0]
-                            surface.max[i, j] = indices[-1]
-
-                        if surface.max[i, j] != -1:
-                            limits = surface.limits
-                            min, max = surface.min[i, j], surface.max[i, j]
-                            if limits['xmin'] == -1:
-                                limits['xmin'] = i
-                            if limits['ymin'] == -1:
-                                limits['ymin'] = j
-                            if i > limits['xmax']:
-                                limits['xmax'] = i
-                            if j > limits['ymax']:
-                                limits['ymax'] = j
-                            if limits['zmin'] == -1 or min < limits['zmin']:
-                                limits['zmin'] = min
-                            if limits['zmax'] == -1 or max > limits['zmax']:
-                                limits['zmax'] = max
-
-            return surfaces
-
-        surfaces_list = Parallel(n_jobs = job_count) \
-            (delayed(analyze_slice)(slice) for slice in slices)
-
-        def overlapping_region(surface1, surface2):
-            limits1, limits2 = surface1.limits, surface2.limits
-            xmin = max(limits1['xmin'], limits2['xmin'])
-            xmax = min(limits1['xmax'], limits2['xmax'])
-            ymin = max(limits1['ymin'], limits2['ymin'])
-            ymax = min(limits1['ymax'], limits2['ymax'])
-
-            if xmin > xmax or ymin > ymax:
-                return None
-
-            return (xmin, xmax, ymin, ymax)
-
-        def is_above(surface1, surface2):
-            # Not necessarily true. Use center of mass instead?
-            return surface1.limits['zmax'] > surface2.limits['zmax']
-
-        for surfaces in surfaces_list:
-            visited = {}
-            for (node, surface) in surfaces.items():
-                if verbose:
-                    print(node, surface.limits)
-
-                for (other_node, other_surface) in surfaces.items():
-                    if other_node != node and other_node not in visited:
-                        olr = overlapping_region(surface, other_surface)
-                        if olr is None:
-                            continue
-
-                        xmin, xmax, ymin, ymax = olr
-
-                        if is_above(surface, other_surface):
-                            delta = surface.min[xmin:xmax, ymin:ymax] - other_surface.max[xmin:xmax, ymin:ymax]
-                        else:
-                            delta = surface.max[xmin:xmax, ymin:ymax] - other_surface.min[xmin:xmax, ymin:ymax]
-
-                        # Currently, we're only checking if there are pores
-                        # directly above or below this one. It could always
-                        # work, if the resolution of the image is high enough,
-                        # but in the future I'd like to check in the direction
-                        # of the other pore, just to be sure.
-                        if 1 in delta:
-                            matrix[node, other_node] = True
-                            matrix[other_node, node] = True
-
-                            if verbose:
-                                print('\t {} connects to {}.'.format(other_node, node))
-
-                visited[node] = True
-
-        if verbose:
-            print('adjacency matrix', matrix)
-
-        matrix2 = self.adjacency_matrix(label_matrix)
-
-        # remove diagonal entries (self-loops)
-        matrix[np.where(np.diag(np.ones(matrix.shape[0], dtype=np.bool)))] = False
-        matrix2[np.where(np.diag(np.ones(matrix.shape[0], dtype=np.bool)))] = False
-
-        # remove irrelevant/noisy labels, pores that are just a few pixels large
-        mask = np.ones(matrix.shape[0], np.bool)
-        mask[labels] = False
-        matrix[mask,:] = False
-        matrix[:,mask] = False
-        matrix2[mask,:] = False
-        matrix2[:,mask] = False
-
-        ## TODO: Verify which are right and why they might be wrong
-        print('Matrices are not equal:')
-        where = np.where(matrix != matrix2)
-        for i in range(len(where[0])):
-            node1, node2 = where[0][i], where[1][i]
-            print('Connection {}-{}: matrix1 = {}, matrix2 = {}'
-                  .format(node1, node2, matrix[node1, node2], matrix2[node1, node2]))
-
-        # fill networkx graph object
-        coo_matrix = sp.sparse.coo_matrix(matrix)
-        conn_list = zip(coo_matrix.row, coo_matrix.col)
         self.graph = nx.Graph()
-        self.graph.add_edges_from(conn_list)
-
-        # load pore properties
-        print('Reading the pore network dataset at {}'.format(pore_data_path))
-        pore = xr.load_dataset(pore_data_path)
-        px = pore.attrs['voxel'].data
-        self.params['re'] = px*np.sqrt(pore['value_properties'].sel(property = 'median_area').data/np.pi)
-        self.params['h0e'] = px*pore['value_properties'].sel(property = 'major_axis').data
+        self.graph.add_edges_from(np.uint16(throats[:,:2]))
+        self.params['re'] = np.sqrt(throats[:,8]/np.pi)*self.params['px']
+        self.params['h0e'] = throats[:,-3]*self.params['px']
 
         # define waiting times
         self.waiting_times_data = stats.delta_t_all
@@ -586,9 +513,9 @@ def plot(pnm, results, sqrt_factor = 0):
 
         plt.title('Comparison between the absorbed volume and the experimental data')
 
-    # plot_comparison()
+    plot_comparison()
     plot_simulation()
-    # plot_simulation_logarithmic()
+    plot_simulation_logarithmic()
     plt.show()
 
 if __name__ == '__main__':
