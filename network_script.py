@@ -190,7 +190,7 @@ class WickingPNM:
         # throw out None-entries (counterintuitive behavior of find_objects)
         pores = deque()
         for pore in crude_pores:
-            if not pore == None:
+            if pore is not None and len(np.unique(pore)) > 2:
                 pores.append(pore)
         crude_pores = None
 
