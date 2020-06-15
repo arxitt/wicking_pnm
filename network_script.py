@@ -231,8 +231,15 @@ class WickingPNM:
 
         self.graph = nx.Graph()
         self.graph.add_edges_from(np.uint16(throats[:,:2]))
-        self.params['re'] = np.sqrt(throats[:,8]/np.pi)*self.params['px']
-        self.params['h0e'] = throats[:,-3]*self.params['px']
+
+        ## From the throats
+        # self.params['re'] = np.sqrt(throats[:,8]/np.pi)*self.params['px']
+        # self.params['h0e'] = throats[:,-3]*self.params['px']
+        ## From the pore dataset
+        pore = xr.load_dataset(pore_data_path)
+        px = pore.attrs['voxel'].data
+        self.params['re'] = px*np.sqrt(pore['value_properties'].sel(property = 'median_area').data/np.pi)
+        self.params['h0e'] = px*pore['value_properties'].sel(property = 'major_axis').data
 
         # define waiting times
         self.waiting_times_data = stats.delta_t_all
