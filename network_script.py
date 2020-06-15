@@ -8,6 +8,7 @@ Created on Wed May  6 08:19:34 2020
 
 import sys
 import argparse
+import random
 
 import xarray as xr
 import numpy as np
@@ -275,7 +276,7 @@ class WickingPNM:
     # TODO: Change this to start with one random inlet and some amount of distant neighbours
     def generate_inlets(self, amount):
         print('Generating {} inlets'.format(amount))
-        pnm.inlets = np.unique(np.random.choice(np.unique(self.graph.nodes), amount))
+        pnm.inlets = random.sample(self.graph.nodes, amount)
 
     """
     find your path through the filled network to calculate the inlet
@@ -570,7 +571,8 @@ if __name__ == '__main__':
 
     if args.generate_network:
         print('Generating an artificial network');
-        pnm.generate(nx.random_regular_graph, 4, args.node_count)
+        n = args.node_count
+        pnm.generate(nx.random_regular_graph, 4, n)
     elif all([args.exp_data, args.pore_data, args.stats_data]):
         print('Reading the network from data')
         pnm.from_data(args.exp_data, args.pore_data, args.stats_data)
