@@ -26,6 +26,64 @@ from skimage.morphology import cube
 job_count = 4 # Default job count, 4 should be fine on most systems
 verbose = False
 
+def label_function(struct, pore_object, sub_dt, bounding_box, label):
+    parameters = ['pore_1', 'pore_2', 'index',
+                  'x_extent', 'y_extent', 'z_extent',
+                  'inscribed_radius', 'perimeter', 'area',
+                  'shape_factor', 'X', 'Y', 'Z',
+                  'major_axis', 'minor_axis', 'aspect_ratio']
+    throat_parameters = namedtuple('ThroatParameters', parameters)
+
+    pore_im = pore_object == label
+    im_w_throats = sp.ndimage.binary_dilation(input = pore_im, structure = struct(3))
+    im_w_throats = im_w_throats*pore_object
+    n_labels = np.unique(im_w_throats)[1:]
+    t_params = deque()
+    for n_label in n_labels: # check neighbor labels for connections, later take the mean of the
+                             # property of throat A->B and B->A as throat property A-B
+        if n_label == label: continue
+        # FIXME: what about multiple connections between two pores --> do a find objects and then make them as extra throats
+        # what about inverse throats? can you match them again? maybe via position (com) --> seems to be fixed
+        throat_im = (im_w_throats == n_label).astype(np.uint8)
+        throat_im = measure.label(throat_im, connectivity=3)
+        throat_props = measure.regionprops(throat_im)
+
+        for prop in throat_props:
+            x_extent, y_extent, z_extent = prop.image.shape
+            conn = (label, n_label)
+            throat = np.where(prop.image)
+            rad_inscribed = sub_dt[throat].max()
+            area, perimeter = prop.area, np.count_nonzero(sub_dt[throat] < 2)
+            if perimeter > 0:
+                shape_factor = area/perimeter**2
+            else:
+                shape_factor = 0
+
+            com = sp.ndimage.measurements.center_of_mass(prop.image)
+            com += np.array([bounding_box[0].start, bounding_box[1].start, bounding_box[2].start]) 
+
+            inertia_tensor = measure._moments.inertia_tensor(prop.image)
+            in_tens_eig = np.linalg.eigvalsh(inertia_tensor)
+
+            major_axis = 4*np.sqrt(np.abs(in_tens_eig[-1]))
+            minor_axis = 4*np.sqrt(np.abs(in_tens_eig[0]))
+
+            aspect_ratio = major_axis/minor_axis
+
+            t_param = throat_parameters(
+                conn[0], conn[1], 0, x_extent, y_extent,
+                z_extent, rad_inscribed, perimeter, area,
+                shape_factor, com[0], com[1], com[2],
+                major_axis, minor_axis, aspect_ratio
+            )
+
+            if verbose:
+                print(t_param)
+
+            t_params.append(t_param)
+
+    return np.array(t_params)
+
 class WickingPNMStats:
     def __init__(self, path):
         # waiting time statistics
@@ -105,7 +163,7 @@ class WickingPNM:
         """
 
         def extend_bounding_box(s, shape, pad=3):
-            a = []
+            a = deque()
             for i, dim in zip(s, shape):
                 start = 0
                 stop = dim
@@ -119,60 +177,6 @@ class WickingPNM:
 
             return a
 
-        parameters = ['pore_1', 'pore_2', 'index',
-                      'x_extent', 'y_extent', 'z_extent',
-                      'inscribed_radius', 'perimeter', 'area',
-                      'shape_factor', 'X', 'Y', 'Z',
-                      'major_axis', 'minor_axis', 'aspect_ratio']
-        throat_parameters = namedtuple('ThroatParameters', parameters)
-        def label_function(struct, pore_object, sub_dt, bounding_box, label):
-            pore_im = pore_object == label
-            im_w_throats = sp.ndimage.binary_dilation(input = pore_im, structure = struct(3))
-            im_w_throats = im_w_throats*pore_object
-            n_labels = np.unique(im_w_throats)[1:]
-            t_params = deque()
-            for n_label in n_labels: # check neighbor labels for connections, later take the mean of the
-                                     # property of throat A->B and B->A as throat property A-B
-                if n_label == label: continue
-                # FIXME: what about multiple connections between two pores --> do a find objects and then make them as extra throats
-                # what about inverse throats? can you match them again? maybe via position (com) --> seems to be fixed
-                throat_im = (im_w_throats == n_label).astype(np.uint8)
-                throat_im = measure.label(throat_im, connectivity=3)
-                throat_props = measure.regionprops(throat_im)
-
-                for prop in throat_props:
-                    x_extent, y_extent, z_extent = prop.image.shape
-                    conn = (label, n_label)
-                    throat = np.where(prop.image)
-                    rad_inscribed = sub_dt[throat].max()
-                    area, perimeter = prop.area, np.count_nonzero(sub_dt[throat] < 2)
-                    if perimeter > 0:
-                        shape_factor = area/perimeter**2
-                    else:
-                        shape_factor = 0
-
-                    com = sp.ndimage.measurements.center_of_mass(prop.image)
-                    com += np.array([bounding_box[0].start, bounding_box[1].start, bounding_box[2].start]) 
-
-                    inertia_tensor = measure._moments.inertia_tensor(prop.image)
-                    in_tens_eig = np.linalg.eigvalsh(inertia_tensor)
-
-                    major_axis = 4*np.sqrt(np.abs(in_tens_eig[-1]))
-                    minor_axis = 4*np.sqrt(np.abs(in_tens_eig[0]))
-
-                    aspect_ratio = major_axis/minor_axis
-
-                    t_param = throat_parameters(
-                        conn[0], conn[1], 0, x_extent, y_extent,
-                        z_extent, rad_inscribed, perimeter, area,
-                        shape_factor, com[0], com[1], com[2],
-                        major_axis, minor_axis, aspect_ratio
-                    )
-
-                    t_params.append(t_param)
-
-            return np.array(t_params)
-
         im = label_matrix
 
         struct = cube # FIXME: ball does not work as you would think (anisotropic expansion)
@@ -184,25 +188,25 @@ class WickingPNM:
 
         crude_pores = sp.ndimage.find_objects(im)
         # throw out None-entries (counterintuitive behavior of find_objects)
-        pores = []
+        pores = deque()
         for pore in crude_pores:
             if not pore == None:
                 pores.append(pore)
         crude_pores = None
 
         shape = im.shape
-        bounding_boxes = []
+        bounding_boxes = deque()
         for pore in pores:
             bounding_boxes.append(extend_bounding_box(pore, shape))
 
-        t_params_raw = Parallel(n_jobs = job_count, backend = 'threading')(
+        t_params_raw = Parallel(n_jobs = job_count)(
             delayed(label_function)\
                 (struct, im[bounding_box], dt[bounding_box], bounding_box, label) \
                 for (bounding_box, label) in zip(bounding_boxes, labels)
         )
 
         # clear out empty objects
-        t_params = []
+        t_params = deque()
         for param in t_params_raw:
             if len(param) > 0:
                 t_params.append(param)
