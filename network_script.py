@@ -27,62 +27,31 @@ job_count = 4 # Default job count, 4 should be fine on most systems
 verbose = False
 
 def label_function(struct, pore_object, sub_dt, bounding_box, label):
-    parameters = ['pore_1', 'pore_2', 'index',
-                  'x_extent', 'y_extent', 'z_extent',
-                  'inscribed_radius', 'perimeter', 'area',
-                  'shape_factor', 'X', 'Y', 'Z',
-                  'major_axis', 'minor_axis', 'aspect_ratio']
-    throat_parameters = namedtuple('ThroatParameters', parameters)
-
     pore_im = pore_object == label
-    im_w_throats = sp.ndimage.binary_dilation(input = pore_im, structure = struct(3))
-    im_w_throats = im_w_throats*pore_object
-    n_labels = np.unique(im_w_throats)[1:]
-    t_params = deque()
-    for n_label in n_labels: # check neighbor labels for connections, later take the mean of the
-                             # property of throat A->B and B->A as throat property A-B
-        if n_label == label: continue
-        # FIXME: what about multiple connections between two pores --> do a find objects and then make them as extra throats
-        # what about inverse throats? can you match them again? maybe via position (com) --> seems to be fixed
-        throat_im = (im_w_throats == n_label).astype(np.uint8)
-        throat_im = measure.label(throat_im, connectivity=3)
-        throat_props = measure.regionprops(throat_im)
+    connections = deque()
 
-        for prop in throat_props:
-            x_extent, y_extent, z_extent = prop.image.shape
-            conn = (label, n_label)
-            throat = np.where(prop.image)
-            rad_inscribed = sub_dt[throat].max()
-            area, perimeter = prop.area, np.count_nonzero(sub_dt[throat] < 2)
-            if perimeter > 0:
-                shape_factor = area/perimeter**2
-            else:
-                shape_factor = 0
+    if verbose:
+        print('Searching around {}'.format(label))
 
-            com = sp.ndimage.measurements.center_of_mass(prop.image)
-            com += np.array([bounding_box[0].start, bounding_box[1].start, bounding_box[2].start]) 
+    binary_throats = sp.ndimage.binary_dilation(input = pore_im, structure = struct(3))
+    throat_locations = np.where(binary_throats)
+    throats = np.zeros(pore_object.shape)
+    throats[throat_locations] = pore_object[throat_locations]
+    throat_objects = measure.label(throats, connectivity = 3)
+    throat_props = measure.regionprops(throat_objects)
+    for prop in throat_props:
+        throat = throats[prop.slice]
+        throat_labels = np.unique(throat)[1:]
+        for other_label in throat_labels:
+            if other_label != label:
+                conn = (label, other_label)
 
-            inertia_tensor = measure._moments.inertia_tensor(prop.image)
-            in_tens_eig = np.linalg.eigvalsh(inertia_tensor)
+                if verbose:
+                    print('\t{} connects to {}'.format(conn[1], conn[0]))
 
-            major_axis = 4*np.sqrt(np.abs(in_tens_eig[-1]))
-            minor_axis = 4*np.sqrt(np.abs(in_tens_eig[0]))
+                connections.append(conn)
 
-            aspect_ratio = major_axis/minor_axis
-
-            t_param = throat_parameters(
-                conn[0], conn[1], 0, x_extent, y_extent,
-                z_extent, rad_inscribed, perimeter, area,
-                shape_factor, com[0], com[1], com[2],
-                major_axis, minor_axis, aspect_ratio
-            )
-
-            if verbose:
-                print(t_param)
-
-            t_params.append(t_param)
-
-    return np.array(t_params)
+    return connections
 
 class WickingPNMStats:
     def __init__(self, path):
@@ -148,8 +117,8 @@ class WickingPNM:
 
         # re and h0e are on a scale of 1E-6 to 1E-3, waiting times from 1 to 1000
         for i in range(size):
-            re[i] /= 10**np.random.randint(3, 6)
-            h0e[i] /= 10**np.random.randint(3, 6)
+            re[i] /= 10**np.random.randint(5, 6)
+            h0e[i] /= 10**np.random.randint(4, 5)
 
         self.build_inlets()
         self.generate_waiting_times()
@@ -199,19 +168,50 @@ class WickingPNM:
         for pore in pores:
             bounding_boxes.append(extend_bounding_box(pore, shape))
 
-        t_params_raw = Parallel(n_jobs = job_count)(
+        connections_raw = Parallel(n_jobs = job_count)(
             delayed(label_function)\
                 (struct, im[bounding_box], dt[bounding_box], bounding_box, label) \
                 for (bounding_box, label) in zip(bounding_boxes, labels)
         )
 
         # clear out empty objects
-        t_params = deque()
-        for param in t_params_raw:
-            if len(param) > 0:
-                t_params.append(param)
+        connections = deque()
+        for connection in connections_raw:
+            if len(connection) > 0:
+                connections.append(connection)
 
-        return np.concatenate(t_params, axis = 0)
+        return np.concatenate(connections, axis = 0)
+
+    def adjacency_matrix(self, label_im):
+        def neighbour_search(label, struct=cube):
+            mask = label_im==label
+            mask = sp.ndimage.binary_dilation(input = mask, structure = struct(3))
+            neighbours = np.unique(label_im[mask])[1:]
+
+            # A node can't be its own neighbour
+            neighbours = neighbours[np.where(neighbours != label)]
+
+            return neighbours
+
+        size = len(label_im)
+        labels = np.unique(label_im[1:])
+        matrix = np.zeros([size,size], dtype=np.bool)
+
+        results = Parallel(n_jobs=job_count)(delayed(neighbour_search)(label) for label in labels)
+
+        if verbose:
+            print('\nFilling matrix')
+        for (label, result) in zip(labels, results):
+            if verbose:
+                print('label', label)
+                print('neighbours', result, '\n')
+
+            matrix[label, result] = True
+
+        # make sure that matrix is symmetric (as it should be)
+        matrix = np.maximum(matrix, matrix.transpose())
+
+        return matrix
 
     def from_data(self, exp_data_path, pore_data_path, stats_path):
         stats = WickingPNMStats(stats_path)
@@ -226,9 +226,8 @@ class WickingPNM:
             print('labels', labels)
             print('label matrix', label_matrix, label_matrix.shape)
 
-        print('Generating the adjacency matrix for the experimental dataset')
+        print('Generating the pore network graph from the experimental dataset')
         throats = self.extract_throat_list(label_matrix, labels)
-
         self.graph = nx.Graph()
         self.graph.add_edges_from(np.uint16(throats[:,:2]))
 
@@ -258,7 +257,7 @@ class WickingPNM:
         else:
             wt = self.waiting_times = np.random.rand(size)
             for i in range(size):
-                wt[i] *= 10**np.random.randint(0, 3)
+                wt[i] *= 10**np.random.randint(-1, 3)
 
     def build_inlets(self, amount = 5):
         inlets = np.array(pnm.inlets, dtype = np.int)
