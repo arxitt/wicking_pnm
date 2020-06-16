@@ -27,7 +27,7 @@ from skimage.morphology import cube
 job_count = 4 # Default job count, 4 should be fine on most systems
 verbose = False
 
-def label_function(struct, pore_object, sub_dt, bounding_box, label):
+def label_function(struct, pore_object, bounding_box, label):
     pore_im = pore_object == label
     connections = deque()
 
@@ -117,6 +117,7 @@ class WickingPNM:
         h0e = self.params['h0e'] = np.random.rand(size)
 
         # re and h0e are on a scale of 1E-6 to 1E-3, waiting times from 1 to 1000
+        # we will need a method to pass experimental information on the pore sizes in the future analogous to 'generate_waiting_times'
         for i in range(size):
             re[i] /= 10**np.random.randint(5, 6)
             h0e[i] /= 10**np.random.randint(4, 5)
@@ -124,7 +125,7 @@ class WickingPNM:
         self.build_inlets()
         self.generate_waiting_times()
 
-    def extract_throat_list(self, label_matrix, labels, dt = None): 
+    def extract_throat_list(self, label_matrix, labels): 
         """
         inspired by Jeff Gostick's GETNET
 
@@ -153,8 +154,6 @@ class WickingPNM:
         if im.ndim == 2:
             struct = disk
 
-        if dt == None:
-            dt = sp.ndimage.distance_transform_edt(im>0)
 
         crude_pores = sp.ndimage.find_objects(im)
         # throw out None-entries (counterintuitive behavior of find_objects)
@@ -171,7 +170,7 @@ class WickingPNM:
 
         connections_raw = Parallel(n_jobs = job_count)(
             delayed(label_function)\
-                (struct, im[bounding_box], dt[bounding_box], bounding_box, label) \
+                (struct, im[bounding_box], bounding_box, label) \
                 for (bounding_box, label) in zip(bounding_boxes, labels)
         )
 
@@ -318,7 +317,7 @@ class WickingPNM:
 
             for neighbour in neighbours:
                 if neighbour in layer:
-                    inv_R_eff += 1/np.float64(self.R0[neighbour] + pnm.R_full[neighbour])
+                    inv_R_eff += 1/np.float64(self.R0[neighbour] + pnm.R_full[neighbour]) #<- you sure about this? you add a resistance to an inverse resistance
 
             self.R0[node] += 1/inv_R_eff
 
