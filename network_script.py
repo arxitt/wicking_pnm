@@ -23,6 +23,7 @@ from joblib import Parallel, delayed
 from collections import deque, namedtuple
 from skimage import measure
 from skimage.morphology import cube
+from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 
 job_count = 4 # Default job count, 4 should be fine on most systems
 verbose = False
@@ -36,6 +37,34 @@ def label_function(struct, pore_object, label):
 
     mask = sp.ndimage.binary_dilation(input = mask, structure = struct(3))
     neighbors = np.unique(pore_object[mask])[1:]
+
+    # 37, 192 = True; 160, 200 = False
+    n1, n2 = 37, 192
+    if label == n1:
+        print('{}, {}'.format(n1, n2))
+        verts1, faces1, _, _ = measure.marching_cubes(pore_object == n1)
+        verts2, faces2, _, _ = measure.marching_cubes(pore_object == n2)
+
+        fig = plt.figure()
+        ax = fig.add_subplot(111, projection = '3d')
+
+        mesh1 = Poly3DCollection(verts1[faces1])
+        mesh1.set_facecolor('w')
+        mesh1.set_edgecolor('g')
+
+        mesh2 = Poly3DCollection(verts2[faces2])
+        mesh2.set_facecolor('r')
+        mesh2.set_edgecolor('k')
+
+        ax.add_collection3d(mesh1)
+        ax.add_collection3d(mesh2)
+
+        xlim, ylim, zlim = pore_object.shape
+        ax.set_xlim(0, xlim)
+        ax.set_ylim(0, ylim)
+        ax.set_zlim(0, zlim)
+
+        plt.show()
 
     for nb in neighbors:
         if nb != label:
@@ -159,17 +188,11 @@ class WickingPNM:
                 pores.append(pore)
                 bounding_boxes.append(bb)
 
-        connections_raw = Parallel(n_jobs = job_count)(
-            delayed(label_function)\
-                (struct, im[bounding_box], label) \
-                for (bounding_box, label) in zip(bounding_boxes, labels)
-        )
-
-        # clear out empty objects
         connections = deque()
-        for connection in connections_raw:
-            if len(connection) > 0:
-                connections.append(connection)
+        for (bounding_box, label) in zip(bounding_boxes, labels):
+            conns = label_function(struct, im[bounding_box], label)
+            if len(conns) > 0:
+                connections.append(conns)
 
         return np.concatenate(connections, axis = 0)
 
