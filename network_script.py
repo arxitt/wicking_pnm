@@ -27,32 +27,55 @@ from skimage.morphology import cube
 job_count = 4 # Default job count, 4 should be fine on most systems
 verbose = False
 
-def label_function(struct, pore_object, bounding_box, label):
-    pore_im = pore_object == label
+#def label_function(struct, pore_object, bounding_box, label):
+#    pore_im = pore_object == label
+#    connections = deque()
+
+#    if verbose:
+#        print('Searching around {}'.format(label))
+
+#    binary_throats = sp.ndimage.binary_dilation(input = pore_im, structure = struct(3))
+#    throat_locations = np.where(binary_throats)
+#    throats = np.zeros(pore_object.shape)
+#    throats[throat_locations] = pore_object[throat_locations]
+#    throat_objects = measure.label(throats, connectivity = 3)
+#    throat_props = measure.regionprops(throat_objects)
+#    for prop in throat_props:
+#        throat = throats[prop.slice]
+#        throat_labels = np.unique(throat)[1:]
+#        for other_label in throat_labels:
+#            if other_label != label:
+#                conn = (label, other_label)
+
+#                if verbose:
+#                    print('\t{} connects to {}'.format(conn[1], conn[0]))
+
+#                connections.append(conn)
+
+#    return connections
+
+
+def label_function(struct, pore_object, label):
+    mask = pore_object == label
     connections = deque()
 
     if verbose:
         print('Searching around {}'.format(label))
 
-    binary_throats = sp.ndimage.binary_dilation(input = pore_im, structure = struct(3))
-    throat_locations = np.where(binary_throats)
-    throats = np.zeros(pore_object.shape)
-    throats[throat_locations] = pore_object[throat_locations]
-    throat_objects = measure.label(throats, connectivity = 3)
-    throat_props = measure.regionprops(throat_objects)
-    for prop in throat_props:
-        throat = throats[prop.slice]
-        throat_labels = np.unique(throat)[1:]
-        for other_label in throat_labels:
-            if other_label != label:
-                conn = (label, other_label)
-
-                if verbose:
-                    print('\t{} connects to {}'.format(conn[1], conn[0]))
-
-                connections.append(conn)
-
+    mask = sp.ndimage.binary_dilation(input = mask, structure = struct(3))
+    neighbors = np.unique(pore_object[mask])
+    
+    for nb in neighbors:
+        if nb == 0: continue
+        if nb != label:
+            conn = (label, nb)
+            
+            if verbose:
+                print('\t{} connects to {}'.format(conn[1], conn[0]))
+             connections.append(conn)
+            
     return connections
+
 
 class WickingPNMStats:
     def __init__(self, path):
@@ -159,7 +182,7 @@ class WickingPNM:
         # throw out None-entries (counterintuitive behavior of find_objects)
         pores = deque()
         for pore in crude_pores:
-            if pore is not None and len(np.unique(pore)) > 2:
+            if pore is not None and len(np.unique(pore)) > 2:  #<- why the second condition?
                 pores.append(pore)
         crude_pores = None
 
@@ -170,7 +193,7 @@ class WickingPNM:
 
         connections_raw = Parallel(n_jobs = job_count)(
             delayed(label_function)\
-                (struct, im[bounding_box], bounding_box, label) \
+                (struct, im[bounding_box], label) \
                 for (bounding_box, label) in zip(bounding_boxes, labels)
         )
 
