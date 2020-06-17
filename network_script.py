@@ -45,7 +45,7 @@ def label_function(struct, pore_object, bounding_box, label):
         throat_labels = np.unique(throat)[1:]
         for other_label in throat_labels:
             if other_label != label:
-                conn = (label, other_label)
+                conn = (np.int(label), np.int(other_label))
 
                 if verbose:
                     print('\t{} connects to {}'.format(conn[1], conn[0]))
@@ -231,6 +231,33 @@ class WickingPNM:
         self.graph = nx.Graph()
         self.graph.add_edges_from(np.uint16(throats[:,:2]))
 
+        size = len(label_matrix)
+        matrix1 = np.zeros([size, size], dtype=np.bool)
+        for (node1, node2) in throats:
+            matrix1[node1, node2] = True
+            matrix1[node2, node1] = True
+
+        matrix2 = self.adjacency_matrix(label_matrix)
+        # remove diagonal entries (self-loops)
+        matrix2[np.where(np.diag(np.ones(matrix2.shape[0], dtype=np.bool)))] = False
+
+        # remove irrelevant/noisy labels, pores that are just a few pixels large
+        mask = np.ones(matrix2.shape[0], np.bool)
+        mask[labels] = False
+        matrix2[mask,:] = False
+        matrix2[:,mask] = False
+
+        visited = {}
+        not_equal = np.argwhere(matrix1 != matrix2)
+        for (m, n) in not_equal:
+            if (m, n) in visited or (n, m) in visited:
+                continue
+
+            print('Connection between {} and {}: {} in matrix1, {} in matrix2'
+                  .format(m, n, matrix1[m, n], matrix2[m, n]))
+            visited[(m, n)] = True
+        sys.exit()
+
         ## From the throats
         # self.params['re'] = np.sqrt(throats[:,8]/np.pi)*self.params['px']
         # self.params['h0e'] = throats[:,-3]*self.params['px']
@@ -317,7 +344,7 @@ class WickingPNM:
 
             for neighbour in neighbours:
                 if neighbour in layer:
-                    inv_R_eff += 1/np.float64(self.R0[neighbour] + pnm.R_full[neighbour]) #<- you sure about this? you add a resistance to an inverse resistance
+                    inv_R_eff += 1/np.float64(self.R0[neighbour] + pnm.R_full[neighbour])
 
             self.R0[node] += 1/inv_R_eff
 
