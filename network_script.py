@@ -27,30 +27,24 @@ from skimage.morphology import cube
 job_count = 4 # Default job count, 4 should be fine on most systems
 verbose = False
 
-def label_function(struct, pore_object, bounding_box, label):
-    pore_im = pore_object == label
+def label_function(struct, pore_object, label):
+    mask = pore_object == label
     connections = deque()
 
     if verbose:
         print('Searching around {}'.format(label))
 
-    binary_throats = sp.ndimage.binary_dilation(input = pore_im, structure = struct(3))
-    throat_locations = np.where(binary_throats)
-    throats = np.zeros(pore_object.shape)
-    throats[throat_locations] = pore_object[throat_locations]
-    throat_objects = measure.label(throats, connectivity = 3)
-    throat_props = measure.regionprops(throat_objects)
-    for prop in throat_props:
-        throat = throats[prop.slice]
-        throat_labels = np.unique(throat)[1:]
-        for other_label in throat_labels:
-            if other_label != label:
-                conn = (np.int(label), np.int(other_label))
+    mask = sp.ndimage.binary_dilation(input = mask, structure = struct(3))
+    neighbors = np.unique(pore_object[mask])[1:]
 
-                if verbose:
-                    print('\t{} connects to {}'.format(conn[1], conn[0]))
+    for nb in neighbors:
+        if nb != label:
+            conn = (label, nb)
 
-                connections.append(conn)
+            if verbose:
+                print('\t{} connects to {}'.format(conn[1], conn[0]))
+
+            connections.append(conn)
 
     return connections
 
@@ -146,7 +140,7 @@ class WickingPNM:
 
                 a.append(slice(start, stop, None))
 
-            return a
+            return tuple(a)
 
         im = label_matrix
 
@@ -154,23 +148,20 @@ class WickingPNM:
         if im.ndim == 2:
             struct = disk
 
-
         crude_pores = sp.ndimage.find_objects(im)
+
         # throw out None-entries (counterintuitive behavior of find_objects)
         pores = deque()
-        for pore in crude_pores:
-            if pore is not None and len(np.unique(pore)) > 2:
-                pores.append(pore)
-        crude_pores = None
-
-        shape = im.shape
         bounding_boxes = deque()
-        for pore in pores:
-            bounding_boxes.append(extend_bounding_box(pore, shape))
+        for pore in crude_pores:
+            bb = extend_bounding_box(pore, im.shape)
+            if pore is not None and len(np.unique(im[bb])) > 2:
+                pores.append(pore)
+                bounding_boxes.append(bb)
 
         connections_raw = Parallel(n_jobs = job_count)(
             delayed(label_function)\
-                (struct, im[bounding_box], bounding_box, label) \
+                (struct, im[bounding_box], label) \
                 for (bounding_box, label) in zip(bounding_boxes, labels)
         )
 
