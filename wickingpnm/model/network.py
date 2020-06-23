@@ -1,34 +1,10 @@
 import random
 import xarray as xr
 import numpy as np
-import scipy as sp
 import networkx as nx
 
-from collections import deque, namedtuple
-from joblib import Parallel, delayed
+from collections import deque
 from scipy.interpolate import interp1d
-from skimage.morphology import cube
-
-def label_function(struct, pore_object, label):
-    mask = pore_object == label
-    connections = deque()
-
-    if self.verbose:
-        print('Searching around {}'.format(label))
-
-    mask = sp.ndimage.binary_dilation(input = mask, structure = struct(3))
-    neighbors = np.unique(pore_object[mask])[1:]
-
-    for nb in neighbors:
-        if nb != label:
-            conn = (label, nb)
-
-            if self.verbose:
-                print('\t{} connects to {}'.format(conn[1], conn[0]))
-
-            connections.append(conn)
-
-    return connections
 
 class PNMStats:
     def __init__(self, path):
@@ -54,23 +30,37 @@ class PNMStats:
 
 # TODO: Make an ExpPNM class and a ArtPNM class
 class PNM:
-    def __init__(self, job_count = 4, verbose = False):
+    def __init__(self, stats_path,
+        inlets = [],
+        dt = 1E-3,
+        tmax = 1600,
+        R_inlet = 1E17,
+        job_count = 4,
+        verbose = False
+    ):
         self.job_count = job_count
         self.verbose = verbose
 
         self.data = None
+        self.stats = None
+        self.randomize_waiting_times = True
+        self.waiting_times_data = None
+
+        if stats_path is not None:
+            self.stats = PNMStats(stats_path)
+            self.waiting_times_data = stats.delta_t_all
+            self.randomize_waiting_times = False
+
         self.graph = None
         self.waiting_times = np.array([])
         self.V = None # Water volume in the network
         self.filled = None # filled nodes
-        self.inlets = None # inlet pores
+        self.inlets = inlets # inlet pores
         self.R0 = None # pore resistances
         self.R_full = None # resistances when full
-        self.R_inlet = 0 # inlet resistance
+        self.R_inlet = R_inlet # inlet resistance
 
-        self.randomize_waiting_times = False
-        self.waiting_times_data = None
-
+        # TODO: Get values from the constructor
         self.params = {
             # General physical constants (material-dependent)
             'eta': 1, # (mPa*s) dynamic viscosity of water
@@ -80,130 +70,27 @@ class PNM:
             
 
             # Simulation boundaries
-            'tmax': 1600, # (seconds)
-            'dt': 1E-3, # (seconds), I think it's safe to increase it a bit, maybe x10-100
+            'tmax': tmax, # (seconds)
+            'dt': dt, # (seconds), I think it's safe to increase it a bit, maybe x10-100
 
             # Experimental radius and height
             're': 0,
             'h0e': 0,
         }
 
-    def generate(self, function, *args):
-        graph = self.graph = function(*args)
-        size = len(graph.nodes)
-        print('Generated graph of size {}, filling with random data'.format(size))
-
-        re = self.params['re'] = np.random.rand(size)
-        h0e = self.params['h0e'] = np.random.rand(size)
-
-        # re and h0e are on a scale of 1E-6 to 1E-3, waiting times from 1 to 1000
-        # we will need a method to pass experimental information on the pore sizes in the future analogous to 'generate_waiting_times'
-        for i in range(size):
-            re[i] /= 10**np.random.randint(5, 6)
-            h0e[i] /= 10**np.random.randint(4, 5)
-
-        self.build_inlets()
-        self.generate_waiting_times()
-
-    def extract_throat_list(self, label_matrix, labels): 
-        """
-        inspired by Jeff Gostick's GETNET
-
-        extracts a list of directed throats connecting pores i->j including a few throat parameters
-        undirected network i-j needs to be calculated in a second step
-        """
-
-        def extend_bounding_box(s, shape, pad=3):
-            a = deque()
-            for i, dim in zip(s, shape):
-                start = 0
-                stop = dim
-
-                if i.start - pad >= 0:
-                    start = i.start - pad
-                if i.stop + pad < dim:
-                    stop = i.stop + pad
-
-                a.append(slice(start, stop, None))
-
-            return tuple(a)
-
-        im = label_matrix
-
-        struct = cube # FIXME: ball does not work as you would think (anisotropic expansion)
-        if im.ndim == 2:
-            struct = disk
-
-        crude_pores = sp.ndimage.find_objects(im)
-
-        # throw out None-entries (counterintuitive behavior of find_objects)
-        pores = deque()
-        bounding_boxes = deque()
-        for pore in crude_pores:
-            bb = extend_bounding_box(pore, im.shape)
-            if pore is not None and len(np.unique(im[bb])) > 2:
-                pores.append(pore)
-                bounding_boxes.append(bb)
-
-        connections_raw = Parallel(n_jobs = self.job_count)(
-            delayed(label_function)\
-                (struct, im[bounding_box], label) \
-                for (bounding_box, label) in zip(bounding_boxes, labels)
-        )
-
-        # clear out empty objects
-        connections = deque()
-        for connection in connections_raw:
-            if len(connection) > 0:
-                connections.append(connection)
-
-        return np.concatenate(connections, axis = 0)
-
-    def from_data(self, exp_data_path, pore_data_path, stats_path):
-        stats = WickingPNMStats(stats_path)
-
-        print('Reading the experimental dataset at {}'.format(exp_data_path))
-        dataset = xr.load_dataset(exp_data_path)
-        label_matrix = dataset['label_matrix'].data
-        labels = dataset['label'].data
-        self.data = dataset
-
-        if self.verbose:
-            print('labels', labels)
-            print('label matrix', label_matrix, label_matrix.shape)
-
-        print('Generating the pore network graph from the experimental dataset')
-        throats = self.extract_throat_list(label_matrix, labels)
-        self.graph = nx.Graph()
-        self.graph.add_edges_from(np.uint16(throats[:,:2]))
-
-        ## From the throats
-        # self.params['re'] = np.sqrt(throats[:,8]/np.pi)*self.params['px']
-        # self.params['h0e'] = throats[:,-3]*self.params['px']
-        ## From the pore dataset
-        pore = xr.load_dataset(pore_data_path)
-        px = pore.attrs['voxel'].data
-        self.params['re'] = px*np.sqrt(pore['value_properties'].sel(property = 'median_area').data/np.pi)
-        self.params['h0e'] = px*pore['value_properties'].sel(property = 'major_axis').data
-
-        # define waiting times
-        self.waiting_times_data = stats.delta_t_all
-        self.generate_waiting_times()
-        self.build_inlets()
-
     def generate_waiting_times(self):
         size = np.array(np.unique(self.graph.nodes)).max() + 1
         data = self.waiting_times_data
 
-        if data is not None and len(data) > 0:
+        if self.randomize_waiting_times or data is None or len(data) > 0:
+            wt = self.waiting_times = np.random.rand(size)
+            for i in range(size):
+                wt[i] *= 10**np.random.randint(-1, 3)
+        else:
             # assign a random waiting time to every pore based on the experimental distribution
             ecdf = ECDF(data)
             func = interp1d(ecdf.y[1:], ecdf.x[1:], fill_value = 'extrapolate')
             self.waiting_times = func(np.random.rand(size))
-        else:
-            wt = self.waiting_times = np.random.rand(size)
-            for i in range(size):
-                wt[i] *= 10**np.random.randint(-1, 3)
 
     def build_inlets(self, amount = 5):
         inlets = np.array(self.inlets, dtype = np.int)

@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 from statsmodels.distributions.empirical_distribution import ECDF
 from collections import deque
 
-class WickingSimulation:
+class Simulation:
     def __init__(self, pnm, sqrt_factor = 0, verbose = False):
         self.pnm = pnm
         self.sqrt_factor = sqrt_factor
@@ -31,9 +31,10 @@ class WickingSimulation:
         node_ids.sort()
         node_ids = np.array(node_ids)
 
-        # Generate_waiting_times will build new waiting times with the ECDF distribution
-        if pnm.randomize_waiting_times:
-            pnm.generate_waiting_times()
+        # Generate_waiting_times will build new waiting times with the same
+        # technique, this is needed so that multiple runs (in multiple
+        # processes) on the same PNM don't produce the same results.
+        pnm.generate_waiting_times()
 
         # create new pore property arrays where the pore label corresponds to the array index
         # this copuld be solved more elegantly with xarray, but the intention was that it works
@@ -51,7 +52,7 @@ class WickingSimulation:
             cc=cc+1
 
         inlets = pnm.inlets
-        R0[inlets] = pnm.params['R_inlet']
+        R0[inlets] = pnm.R_inlet
         pnm.R_full = pnm.poiseuille_resistance(h0, r) + R0
 
         # this is the simulation:
@@ -65,7 +66,7 @@ class WickingSimulation:
             inlets_dict[node] = True
 
         # every time step solve explicitly
-        R_inlet = pnm.params['R_inlet']
+        R_inlet = pnm.R_inlet
         tmax = pnm.params['tmax']
         dt = np.float64(pnm.params['dt'])
         t = dt

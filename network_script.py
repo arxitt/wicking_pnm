@@ -12,8 +12,9 @@ import argparse
 import networkx as nx
 from joblib import Parallel, delayed
 
-from wickingpnm.PNM import PNM
-from wickingpnm.WickingSimulation import WickingSimulation
+from wickingpnm.model.experimental import ExpPNM
+from wickingpnm.model.artificial import ArtPNM
+from wickingpnm.simulation import Simulation
 
 if __name__ == '__main__':
     ### Parse arguments
@@ -44,24 +45,34 @@ if __name__ == '__main__':
 
     ### Initialize the PNM
     results = []
-    pnm = PNM(job_count = job_count, verbose = verbose)
-    pnm.params['dt'] = args.time_step
-    pnm.params['tmax'] = args.max_time
-    pnm.params['R_inlet'] = 2E17 #Pas/m3
-    pnm.inlets = args.inlets.split(',') # Previously [162, 171, 207]
-    if '' in pnm.inlets:
-        pnm.inlets = []
+    R_inlet = 2E17 # Pas/m3
+    inlets = args.inlets.split(',') # Previously [162, 171, 207]
+    if '' in inlets:
+        inlets = []
     else:
-        for inlet in pnm.inlets:
+        for inlet in inlets:
             inlet = int(inlet)
+
+    pnm_params = {
+        'inlets': inlets,
+        'dt': args.time_step,
+        'tmax': args.max_time,
+        'R_inlet': R_inlet,
+        'job_count': job_count,
+        'verbose': verbose
+    }
+
+    if args.stats_data is None:
+        print('No network statistics were given, using random waiting times.')
 
     if args.generate_network:
         print('Generating an artificial network');
         n = args.node_count
+        pnm = ArtPNM(args.stats_data, **pnm_params)
         pnm.generate(nx.random_regular_graph, 4, n)
     elif all([args.exp_data, args.pore_data, args.stats_data]):
         print('Reading the network from data')
-        pnm.from_data(args.exp_data, args.pore_data, args.stats_data)
+        pnm = ExpPNM(args.exp_data, args.pore_data, args.stats_data, **pnm_params)
     else:
         raise ValueError('Either -G has to be used, or all of the data paths have to be defined.')
 
@@ -71,7 +82,7 @@ if __name__ == '__main__':
         print('\nwaiting times', pnm.waiting_times, '\n')
         print('\ninlets', pnm.inlets, '\n')
 
-    simulation = WickingSimulation(pnm, sqrt_factor = args.sqrt_factor, verbose = verbose)
+    simulation = Simulation(pnm, sqrt_factor = args.sqrt_factor, verbose = verbose)
 
     ### Get simulation results
     I = args.iteration_count
@@ -84,7 +95,6 @@ if __name__ == '__main__':
     else:
         njobs = min(I, job_count)
         print('Starting the simulation with a timestep of {}s for {} times with {} jobs.'.format(args.time_step, I, njobs))
-        pnm.randomize_waiting_times = True
         results = Parallel(n_jobs=njobs)(delayed(simulation.run)() for i in range(I))
 
     if not args.no_plot:
