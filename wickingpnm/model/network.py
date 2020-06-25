@@ -48,7 +48,7 @@ class PNM:
 
         if stats_path is not None:
             self.stats = PNMStats(stats_path)
-            self.waiting_times_data = stats.delta_t_all
+            self.waiting_times_data = self.stats.delta_t_all
             self.randomize_waiting_times = False
 
         self.graph = None

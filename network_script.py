@@ -72,7 +72,7 @@ if __name__ == '__main__':
         pnm.generate(nx.random_regular_graph, 4, n)
     elif all([args.exp_data, args.pore_data, args.stats_data]):
         print('Reading the network from data')
-        pnm = ExpPNM(args.exp_data, args.pore_data, args.stats_data, **pnm_params)
+        pnm = ExpPNM(args.stats_data, args.exp_data, args.pore_data, **pnm_params)
     else:
         raise ValueError('Either -G has to be used, or all of the data paths have to be defined.')
 

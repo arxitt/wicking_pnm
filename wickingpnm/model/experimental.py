@@ -1,6 +1,7 @@
 import xarray as xr
 import numpy as np
 import scipy as sp
+import networkx as nx
 
 from collections import deque
 from joblib import Parallel, delayed
@@ -8,11 +9,11 @@ from skimage.morphology import cube
 
 from wickingpnm.model.network import PNM
 
-def label_function(struct, pore_object, label):
+def label_function(struct, pore_object, label, verbose = False):
     mask = pore_object == label
     connections = deque()
 
-    if self.verbose:
+    if verbose:
         print('Searching around {}'.format(label))
 
     mask = sp.ndimage.binary_dilation(input = mask, structure = struct(3))
@@ -22,7 +23,7 @@ def label_function(struct, pore_object, label):
         if nb != label:
             conn = (label, nb)
 
-            if self.verbose:
+            if verbose:
                 print('\t{} connects to {}'.format(conn[1], conn[0]))
 
             connections.append(conn)
@@ -103,7 +104,7 @@ class ExpPNM(PNM):
 
         connections_raw = Parallel(n_jobs = self.job_count)(
             delayed(label_function)\
-                (struct, im[bounding_box], label) \
+                (struct, im[bounding_box], label, self.verbose) \
                 for (bounding_box, label) in zip(bounding_boxes, labels)
         )
 
