@@ -9,6 +9,26 @@ class Simulation:
         self.sqrt_factor = sqrt_factor
         self.verbose = verbose
 
+        # this part is necessary to match the network pore labels to the pore property arrays
+        nodes = self.nodes = np.array(pnm.graph.nodes)
+        self.n_init = nodes.max() + 1
+        self.node_ids = np.array(nodes)
+        self.node_ids.sort()
+
+        # create new pore property arrays where the pore label corresponds to the array index
+        # this copuld be solved more elegantly with xarray, but the intention was that it works
+        n = self.n_init
+        pnm.filled = np.zeros(n, dtype = np.bool)
+        pnm.R0 = np.zeros(n)
+        self.act_time = np.zeros(n)
+        self.h = np.zeros(n)+1E-6
+        self.r = np.zeros(n)
+        self.h0 = np.zeros(n)
+
+        for node_id in self.node_ids:
+            self.r[node_id] = pnm.params['re'][node_id]
+            self.h0[node_id] = pnm.params['h0e'][node_id]
+
         self.plot_sqrt = sqrt_factor > 0
         self.line_alpha = lambda _: 1
         if self.plot_sqrt:
@@ -21,34 +41,17 @@ class Simulation:
     # TODO: Move the initialization to __init__
     def run(self):
         pnm = self.pnm
-
-        # this part is necessary to match the network pore labels to the pore property arrays
-        nodes = np.array(pnm.graph.nodes)
-        n = len(nodes)  
-        n_init = nodes.max()+1
-        node_ids = nodes
-        node_ids.sort()
-        node_ids = np.array(node_ids)
+        filled = pnm.filled
+        R0 = pnm.R0
+        act_time = self.act_time
+        h = self.h
+        r = self.r
+        h0 = self.h0
 
         # Generate_waiting_times will build new waiting times with the same
         # technique, this is needed so that multiple runs (in multiple
         # processes) on the same PNM don't produce the same results.
         pnm.generate_waiting_times()
-
-        # create new pore property arrays where the pore label corresponds to the array index
-        # this copuld be solved more elegantly with xarray, but the intention was that it works
-
-        filled = pnm.filled = np.zeros(n_init, dtype = np.bool)
-        R0 = pnm.R0 = np.zeros(n_init)
-        act_time = np.zeros(n_init)
-        h = np.zeros(n_init)+1E-6
-        r = np.zeros(n_init)
-        h0 = np.zeros(n_init)
-        cc=0
-        for node_id in node_ids:
-            r[node_id] = pnm.params['re'][cc]
-            h0[node_id] = pnm.params['h0e'][cc]
-            cc=cc+1
 
         inlets = pnm.inlets
         R0[inlets] = pnm.R_inlet
@@ -114,7 +117,7 @@ class Simulation:
 
             time[step] = t
             # TODO: Stop when the filling slows down meaningfully
-            V[step] = pnm.total_volume(h[node_ids], r[node_ids])
+            V[step] = pnm.total_volume(h[self.node_ids], r[self.node_ids])
             step += 1
             t += dt
 
