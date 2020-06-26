@@ -5,6 +5,7 @@ import networkx as nx
 
 from collections import deque
 from scipy.interpolate import interp1d
+from statsmodels.distributions.empirical_distribution import ECDF
 
 class PNMStats:
     def __init__(self, path):
@@ -82,7 +83,7 @@ class PNM:
         size = np.array(np.unique(self.graph.nodes)).max() + 1
         data = self.waiting_times_data
 
-        if self.randomize_waiting_times or data is None or len(data) > 0:
+        if self.randomize_waiting_times or data is None or len(data) == 0:
             wt = self.waiting_times = np.random.rand(size)
             for i in range(size):
                 wt[i] *= 10**np.random.randint(-1, 3)
@@ -110,13 +111,13 @@ class PNM:
         print('Generating {} inlets'.format(amount))
         self.inlets = random.sample(self.graph.nodes, amount)
 
-    """
-    find your path through the filled network to calculate the inlet
-    resistance imposed on the pores at the waterfront
-    quick and dirty, this part makes the code slow and might even be wrong
-    we have to check
-    """
     def outlet_resistances(self):
+        """
+        find your path through the filled network to calculate the inlet
+        resistance imposed on the pores at the waterfront
+        quick and dirty, this part makes the code slow and might even be wrong
+        we have to check
+        """
         # initialize pore resistances
         self.R0 = np.zeros(len(self.filled))
 
