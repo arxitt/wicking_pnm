@@ -12,8 +12,7 @@ import argparse
 import networkx as nx
 from joblib import Parallel, delayed
 
-from wickingpnm.model.experimental import ExpPNM
-from wickingpnm.model.artificial import ArtPNM
+from wickingpnm.model import PNM
 from wickingpnm.simulation import Simulation
 
 if __name__ == '__main__':
@@ -54,6 +53,8 @@ if __name__ == '__main__':
             inlet = int(inlet)
 
     pnm_params = {
+        'exp_data_path': args.exp_data,
+        'pore_data_path': args.pore_data,
         'inlets': inlets,
         'dt': args.time_step,
         'tmax': args.max_time,
@@ -68,13 +69,11 @@ if __name__ == '__main__':
     if args.generate_network:
         print('Generating an artificial network');
         n = args.node_count
-        pnm = ArtPNM(args.stats_data, **pnm_params)
-        pnm.generate(nx.random_regular_graph, 4, n)
-    elif all([args.exp_data, args.pore_data, args.stats_data]):
-        print('Reading the network from data')
-        pnm = ExpPNM(args.stats_data, args.exp_data, args.pore_data, **pnm_params)
-    else:
-        raise ValueError('Either -G has to be used, or all of the data paths have to be defined.')
+        pnm_params['graph'] = nx.random_regular_graph(4, n)
+    elif pnm_params['exp_data_path'] is None:
+        raise ValueError('Please use either -G or -E to choose a graph model')
+
+    pnm = PNM(args.stats_data, **pnm_params)
 
     if verbose:
         print('\nre', pnm.params['re'], '\n')

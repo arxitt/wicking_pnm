@@ -1,11 +1,35 @@
 import random
 import xarray as xr
 import numpy as np
+import scipy as sp
 import networkx as nx
 
 from collections import deque
+from skimage.morphology import cube
 from scipy.interpolate import interp1d
 from statsmodels.distributions.empirical_distribution import ECDF
+from joblib import Parallel, delayed
+
+def label_function(struct, pore_object, label, verbose = False):
+    mask = pore_object == label
+    connections = deque()
+
+    if verbose:
+        print('Searching around {}'.format(label))
+
+    mask = sp.ndimage.binary_dilation(input = mask, structure = struct(3))
+    neighbors = np.unique(pore_object[mask])[1:]
+
+    for nb in neighbors:
+        if nb != label:
+            conn = (label, nb)
+
+            if verbose:
+                print('\t{} connects to {}'.format(conn[1], conn[0]))
+
+            connections.append(conn)
+
+    return connections
 
 class PNMStats:
     def __init__(self, path):
@@ -29,9 +53,11 @@ class PNMStats:
 
         self.delta_t_all = stats_dataset['deltatall'].data
 
-# TODO: Make an ExpPNM class and a ArtPNM class
 class PNM:
     def __init__(self, stats_path,
+        graph = None,
+        exp_data_path = None,
+        pore_data_path = None,
         inlets = [],
         dt = 1E-3,
         tmax = 1600,
@@ -42,7 +68,6 @@ class PNM:
         self.job_count = job_count
         self.verbose = verbose
 
-        self.data = None
         self.stats = None
         self.randomize_waiting_times = True
         self.waiting_times_data = None
@@ -52,7 +77,7 @@ class PNM:
             self.waiting_times_data = self.stats.delta_t_all
             self.randomize_waiting_times = False
 
-        self.graph = None
+        self.graph = graph
         self.waiting_times = np.array([])
         self.V = None # Water volume in the network
         self.filled = None # filled nodes
@@ -69,7 +94,6 @@ class PNM:
             'cos_theta': np.cos(np.radians(50)), # Young's contact angle
             'px': 2.75E-6, # (m)
             
-
             # Simulation boundaries
             'tmax': tmax, # (seconds)
             'dt': dt, # (seconds), I think it's safe to increase it a bit, maybe x10-100
@@ -78,6 +102,109 @@ class PNM:
             're': 0,
             'h0e': 0,
         }
+
+        if exp_data_path is not None:
+            print('Reading the experimental dataset at {}'.format(exp_data_path))
+            self.data = xr.load_dataset(exp_data_path)
+            self.generate_graph(self.data)
+
+        if pore_data_path is not None:
+            print('Reading the pore dataset at {}'.format(pore_data_path))
+            pore_data = xr.load_dataset(pore_data_path)
+            self.generate_pore_data(pore_data)
+        else:
+            self.generate_pore_data()
+
+        self.generate_waiting_times()
+        self.build_inlets()
+
+    def extract_throat_list(self, label_matrix, labels): 
+        """
+        inspired by Jeff Gostick's GETNET
+
+        extracts a list of directed throats connecting pores i->j including a few throat parameters
+        undirected network i-j needs to be calculated in a second step
+        """
+
+        def extend_bounding_box(s, shape, pad=3):
+            a = deque()
+            for i, dim in zip(s, shape):
+                start = 0
+                stop = dim
+
+                if i.start - pad >= 0:
+                    start = i.start - pad
+                if i.stop + pad < dim:
+                    stop = i.stop + pad
+
+                a.append(slice(start, stop, None))
+
+            return tuple(a)
+
+        im = label_matrix
+
+        struct = cube # FIXME: ball does not work as you would think (anisotropic expansion)
+        if im.ndim == 2:
+            struct = disk
+
+        crude_pores = sp.ndimage.find_objects(im)
+
+        # throw out None-entries (counterintuitive behavior of find_objects)
+        pores = deque()
+        bounding_boxes = deque()
+        for pore in crude_pores:
+            bb = extend_bounding_box(pore, im.shape)
+            if pore is not None and len(np.unique(im[bb])) > 2:
+                pores.append(pore)
+                bounding_boxes.append(bb)
+
+        connections_raw = Parallel(n_jobs = self.job_count)(
+            delayed(label_function)\
+                (struct, im[bounding_box], label, self.verbose) \
+                for (bounding_box, label) in zip(bounding_boxes, labels)
+        )
+
+        # clear out empty objects
+        connections = deque()
+        for connection in connections_raw:
+            if len(connection) > 0:
+                connections.append(connection)
+
+        return np.concatenate(connections, axis = 0)
+
+    def generate_graph(self, exp_data):
+        label_matrix = exp_data['label_matrix'].data
+        labels = exp_data['label'].data
+
+        if self.verbose:
+            print('labels', labels)
+            print('label matrix shape', label_matrix.shape)
+
+        if self.graph is None:
+            print('Generating the pore network graph from the experimental dataset')
+            throats = self.extract_throat_list(label_matrix, labels)
+            self.graph = nx.Graph()
+            self.graph.add_edges_from(np.uint16(throats[:,:2]))
+
+    def generate_pore_data(self, pore_data = None):
+        if pore_data is None:
+            if self.verbose:
+                print('Filling the graph with random pore data')
+
+            size = len(self.graph.nodes)
+            re = self.params['re'] = np.random.rand(size)
+            h0e = self.params['h0e'] = np.random.rand(size)
+            for i in range(size):
+                re[i] /= 10**np.random.randint(5, 6)
+                h0e[i] /= 10**np.random.randint(4, 5)
+
+        else:
+            if self.verbose:
+                print('Using experimental pore data')
+
+            px = pore_data.attrs['voxel'].data
+            self.params['re'] = px*np.sqrt(pore_data['value_properties'].sel(property = 'median_area').data/np.pi)
+            self.params['h0e'] = px*pore_data['value_properties'].sel(property = 'major_axis').data
 
     def generate_waiting_times(self):
         size = np.array(np.unique(self.graph.nodes)).max() + 1
