@@ -25,9 +25,11 @@ class Simulation:
         self.r = np.zeros(n)
         self.h0 = np.zeros(n)
 
+        i = 0
         for node_id in self.node_ids:
-            self.r[node_id] = pnm.params['re'][node_id]
-            self.h0[node_id] = pnm.params['h0e'][node_id]
+            self.r[node_id] = pnm.params['re'][i]
+            self.h0[node_id] = pnm.params['h0e'][i]
+            i += 1
 
         self.plot_sqrt = sqrt_factor > 0
         self.line_alpha = lambda _: 1
