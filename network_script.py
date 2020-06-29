@@ -31,6 +31,7 @@ if __name__ == '__main__':
     parser.add_argument('-P', '--pore-data', default = None, help = 'Path to the pore network data')
     parser.add_argument('-S', '--stats-data', default = None, help = 'Path to the network statistics')
     parser.add_argument('-Np', '--no-plot', action = 'store_true', help = 'Don\'t plot the results')
+    parser.add_argument('-R', '--upstream-resistance', type = int, default = 2E17, help = 'Upstream resistance affecting the inlet pores (default to 2E17)')
 
     args = parser.parse_args()
     if args.iteration_count < 0:
@@ -44,7 +45,7 @@ if __name__ == '__main__':
 
     ### Initialize the PNM
     results = []
-    R_inlet = 2E17 # Pas/m3
+    R_inlet = args.upstream_resistance # Pas/m3
     inlets = args.inlets.split(',') # Previously [162, 171, 207]
     if '' in inlets:
         inlets = []
