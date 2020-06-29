@@ -3,10 +3,48 @@ import matplotlib.pyplot as plt
 
 from collections import deque
 
+class Material:
+    def __init__(self, eta, gamma, theta, px):
+        # General physical constants (material-dependent)
+        self.eta = eta # (mPa*s) dynamic viscosity of water
+        self.gamma = gamma # (mN/m) surface tension of water
+        self.theta = theta
+        self.cos_theta = np.cos(np.radians(theta)) # Young's contact angle
+        self.px = px # (m)
+
+    ## function to calculate the resistance of a full pore
+    def poiseuille_resistance(self, l, r):
+        return 8*self.eta*l/np.pi/r**4
+
+    ## function to calculate the filling velocity considering the inlet resistance and tube radius
+    def capillary_rise(self, t, r, R0):
+        gamma, cos, eta = self.gamma, self.cos_theta, self.eta
+        return gamma*r*cos/2/eta/np.sqrt((R0*np.pi*r**4/8/eta)**2+gamma*r*cos*t/2/eta)
+
+    ## use capillary_rise2 because the former did not consider that R0 can change over time, should be irrelevant because pore contribution becomes quickly irrelevant , but still...
+    def capillary_rise2(self, r, R0, h):
+        return 2*self.gamma*self.cos_theta/(R0*np.pi*r**3+8*self.eta*h/r)
+
+    ## wrap up pore filling states to get total amount of water in the network
+    def total_volume(self, h, r):
+        return (h*np.pi*r**2).sum()
+
 class Simulation:
-    def __init__(self, pnm, sqrt_factor = 0, verbose = False):
+    def __init__(self, pnm,
+            sqrt_factor = 0,
+            max_time = 1600,
+            time_step = 1E-2,
+            eta = 1,
+            gamma = 72.6,
+            theta = 50,
+            px = 2.75E-6,
+            verbose = False
+        ):
         self.pnm = pnm
+        self.material = Material(eta, gamma, theta, px)
         self.sqrt_factor = sqrt_factor
+        self.max_time = max_time
+        self.time_step = time_step
         self.verbose = verbose
 
         # this part is necessary to match the network pore labels to the pore property arrays
@@ -27,14 +65,14 @@ class Simulation:
 
         i = 0
         for node_id in self.node_ids:
-            self.r[node_id] = pnm.params['re'][i]
-            self.h0[node_id] = pnm.params['h0e'][i]
+            self.r[node_id] = pnm.radi[i]
+            self.h0[node_id] = pnm.heights[i]
             i += 1
 
         self.plot_sqrt = sqrt_factor > 0
         self.line_alpha = lambda _: 1
         if self.plot_sqrt:
-            self.xsqrt = np.arange(1, pnm.params['tmax'])
+            self.xsqrt = np.arange(1, self.max_time)
             self.ysqrt = sqrt_factor*np.sqrt(xsqrt)
             self.line_alpha = lambda results: \
                 1 if len(results) < 10 else 0.5
@@ -57,7 +95,7 @@ class Simulation:
 
         inlets = pnm.inlets
         R0[inlets] = pnm.R_inlet
-        pnm.R_full = pnm.poiseuille_resistance(h0, r) + R0
+        pnm.R_full = self.material.poiseuille_resistance(h0, r) + R0
 
         # this is the simulation:
         active = deque(inlets)
@@ -71,8 +109,8 @@ class Simulation:
 
         # every time step solve explicitly
         R_inlet = pnm.R_inlet
-        tmax = pnm.params['tmax']
-        dt = np.float64(pnm.params['dt'])
+        tmax = self.max_time
+        dt = np.float64(self.time_step)
         t = dt
 
         step = 0
@@ -98,10 +136,10 @@ class Simulation:
                 if t > act_time[node]:
                     if node in inlets_dict:
                         # patch to consider inlet resitance at inlet pores
-                        h[node] += dt*pnm.capillary_rise2(r[node], R0[node] + R_inlet, h[node])
+                        h[node] += dt*self.material.capillary_rise2(r[node], R0[node] + R_inlet, h[node])
                     else:
                         # influence of inlet resistance on downstream pores considered by initialization of poiseuille resistances
-                        h[node] += dt*pnm.capillary_rise2(r[node], R0[node], h[node])
+                        h[node] += dt*self.material.capillary_rise2(r[node], R0[node], h[node])
 
                     # if pore is filled, look for neighbours that would now start to get filled
                     if h[node] >= h0[node]:
@@ -119,7 +157,7 @@ class Simulation:
 
             time[step] = t
             # TODO: Stop when the filling slows down meaningfully
-            V[step] = pnm.total_volume(h[self.node_ids], r[self.node_ids])
+            V[step] = self.material.total_volume(h[self.node_ids], r[self.node_ids])
             step += 1
             t += dt
 
@@ -137,7 +175,7 @@ class Simulation:
         plt.title('Absorbed volume for each run')
         plt.xlabel('time [s]')
         plt.ylabel('volume [m3]')
-        plt.xlim(0.1, self.pnm.params['tmax'])
+        plt.xlim(0.1, self.max_time)
         return plt
         
     def plot_simulation_logarithmic(self, results):
@@ -151,7 +189,7 @@ class Simulation:
         plt.title('Absorbed volume for each run (logarithmic)')
         plt.xlabel('time [s]')
         plt.ylabel('volume [m3]')
-        plt.xlim(0.1, self.pnm.params['tmax'])
+        plt.xlim(0.1, self.max_time)
         return plt
 
     def plot_flux(self, results):
@@ -172,7 +210,7 @@ class Simulation:
     def plot_comparison(self, results):
         # compare to experimental data
         plt.figure()
-        vxm3 = self.pnm.params['px']**3
+        vxm3 = self.material.px**3
         test = np.array(results)
         std = test[:,1,:].std(axis=0)
         mean = test[:,1,:].mean(axis=0)
@@ -191,7 +229,7 @@ class Simulation:
         if self.plot_sqrt:
             plt.plot(xsqrt, ysqrt, dashes = (5, 5), color = sqrt_col, alpha = 1)
 
-        if self.pnm.data:
+        if self.pnm.data is not None:
             (self.pnm.data['volume'].sum(axis = 0)*vxm3).plot(color='k')
 
         plt.title('Comparison between the absorbed volume and the experimental data')

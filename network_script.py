@@ -57,8 +57,6 @@ if __name__ == '__main__':
         'exp_data_path': args.exp_data,
         'pore_data_path': args.pore_data,
         'inlets': inlets,
-        'dt': args.time_step,
-        'tmax': args.max_time,
         'R_inlet': R_inlet,
         'job_count': job_count,
         'verbose': verbose
@@ -77,12 +75,17 @@ if __name__ == '__main__':
     pnm = PNM(args.stats_data, **pnm_params)
 
     if verbose:
-        print('\nre', pnm.params['re'], '\n')
-        print('\nh0e', pnm.params['h0e'], '\n')
+        print('\nre', pnm.radi, '\n')
+        print('\nh0e', pnm.heights, '\n')
         print('\nwaiting times', pnm.waiting_times, '\n')
         print('\ninlets', pnm.inlets, '\n')
 
-    simulation = Simulation(pnm, sqrt_factor = args.sqrt_factor, verbose = verbose)
+    simulation = Simulation(pnm,
+        sqrt_factor = args.sqrt_factor,
+        max_time = args.max_time,
+        time_step = args.time_step,
+        verbose = verbose
+    )
 
     ### Get simulation results
     I = args.iteration_count

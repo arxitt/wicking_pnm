@@ -59,8 +59,6 @@ class PNM:
         exp_data_path = None,
         pore_data_path = None,
         inlets = [],
-        dt = 1E-3,
-        tmax = 1600,
         R_inlet = 1E17,
         job_count = 4,
         verbose = False
@@ -78,6 +76,7 @@ class PNM:
             self.randomize_waiting_times = False
 
         self.graph = graph
+        self.data = None
         self.waiting_times = np.array([])
         self.V = None # Water volume in the network
         self.filled = None # filled nodes
@@ -86,22 +85,8 @@ class PNM:
         self.R_full = None # resistances when full
         self.R_inlet = R_inlet # inlet resistance
 
-        # TODO: Get values from the constructor
-        self.params = {
-            # General physical constants (material-dependent)
-            'eta': 1, # (mPa*s) dynamic viscosity of water
-            'gamma': 72.6, # (mN/m) surface tension of water
-            'cos_theta': np.cos(np.radians(50)), # Young's contact angle
-            'px': 2.75E-6, # (m)
-            
-            # Simulation boundaries
-            'tmax': tmax, # (seconds)
-            'dt': dt, # (seconds), I think it's safe to increase it a bit, maybe x10-100
-
-            # Experimental radius and height
-            're': 0,
-            'h0e': 0,
-        }
+        self.radi = None
+        self.heights = None
 
         if exp_data_path is not None:
             print('Reading the experimental dataset at {}'.format(exp_data_path))
@@ -192,8 +177,8 @@ class PNM:
                 print('Filling the graph with random pore data')
 
             size = len(self.graph.nodes)
-            re = self.params['re'] = np.random.rand(size)
-            h0e = self.params['h0e'] = np.random.rand(size)
+            re = self.radi = np.random.rand(size)
+            h0e = self.heights = np.random.rand(size)
             for i in range(size):
                 re[i] /= 10**np.random.randint(5, 6)
                 h0e[i] /= 10**np.random.randint(4, 5)
@@ -203,8 +188,8 @@ class PNM:
                 print('Using experimental pore data')
 
             px = pore_data.attrs['voxel'].data
-            self.params['re'] = px*np.sqrt(pore_data['value_properties'].sel(property = 'median_area').data/np.pi)
-            self.params['h0e'] = px*pore_data['value_properties'].sel(property = 'major_axis').data
+            self.radi = px*np.sqrt(pore_data['value_properties'].sel(property = 'median_area').data/np.pi)
+            self.heights = px*pore_data['value_properties'].sel(property = 'major_axis').data
 
     def generate_waiting_times(self):
         size = np.array(np.unique(self.graph.nodes)).max() + 1
@@ -291,23 +276,3 @@ class PNM:
             print('next layer', next_layer)
 
         return self.outlet_resistances_r(next_layer, visited)
-
-    ## function to calculate the resistance of a full pore
-    def poiseuille_resistance(self, l, r):
-        p = self.params
-        return 8*p['eta']*l/np.pi/r**4
-
-    ## function to calculate the filling velocity considering the inlet resistance and tube radius
-    def capillary_rise(self, t, r, R0):
-        p = self.params
-        gamma, cos, eta = p['gamma'], p['cos_theta'], p['eta']
-        return gamma*r*cos/2/eta/np.sqrt((R0*np.pi*r**4/8/eta)**2+gamma*r*cos*t/2/eta)
-
-    ## use capillary_rise2 because the former did not consider that R0 can change over time, should be irrelevant because pore contribution becomes quickly irrelevant , but still...
-    def capillary_rise2(self, r, R0, h):
-        p = self.params
-        return 2*p['gamma']*p['cos_theta']/(R0*np.pi*r**3+8*p['eta']*h/r)
-
-    ## wrap up pore filling states to get total amount of water in the network
-    def total_volume(self, h, r):
-        return (h*np.pi*r**2).sum()
