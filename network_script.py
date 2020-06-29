@@ -20,7 +20,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description = 'Simulation parameters')
     parser.add_argument('-v', '--verbose', action = 'store_true', help = 'Be verbose during the simulation')
     parser.add_argument('-G', '--generate-network', action = 'store_true', help = 'Generate an artificial pore network model and ignore -E, -P and -S')
-    parser.add_argument('-f', '--sqrt-factor', type = float, default = 0, help = 'Show a square with the given factor with the plots')
+    parser.add_argument('-f', '--sqrt-factor', type = float, default = 0, help = 'Show a square root with the given factor with the plots')
     parser.add_argument('-n', '--node-count', type = int, default = 100, help = 'The amount of nodes in the random graph (default to 100)')
     parser.add_argument('-c', '--iteration-count', type = int, default = 1, help = 'The amount of times to run the simulation (default to 1)')
     parser.add_argument('-s', '--time-step', type = float, default = 1E-3, help = 'The atomic time step to use throughout the simulation in seconds (default to 0.001)')
