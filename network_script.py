@@ -9,11 +9,12 @@ Created on Wed May  6 08:19:34 2020
 import sys
 import argparse
 
+import numpy as np
 import networkx as nx
 from joblib import Parallel, delayed
 
 from wickingpnm.model import PNM
-from wickingpnm.simulation import Simulation
+from wickingpnm.simulation import Simulation, Material
 
 if __name__ == '__main__':
     ### Parse arguments
@@ -27,6 +28,7 @@ if __name__ == '__main__':
     parser.add_argument('-t', '--max-time', type = float, default = 1600, help = 'The amount of time to simulate in seconds (default to 1600)')
     parser.add_argument('-R', '--upstream-resistance', type = int, default = 2E17, help = 'Upstream resistance affecting the inlet pores (default to 2E17)')
     parser.add_argument('-i', '--inlets', type = str, default = '', help = 'Labels for inlet pores (random by default)')
+    parser.add_argument('-m', '--material', type = str, default = '', help = 'Material parameters written as eta,gamma,theta,px')
     parser.add_argument('-j', '--job-count', type = int, default = 4, help = 'The amount of jobs to use (default to 4)')
     parser.add_argument('-E', '--exp-data', default = None, help = 'Path to the experimental data')
     parser.add_argument('-P', '--pore-data', default = None, help = 'Path to the pore network data')
@@ -80,7 +82,18 @@ if __name__ == '__main__':
         print('\nwaiting times', pnm.waiting_times, '\n')
         print('\ninlets', pnm.inlets, '\n')
 
+    if args.material:
+        mp = []
+        for param in args.material.split(','):
+            mp.append(np.float64(param))
+
+        material = Material(*mp)
+    else:
+        material = Material()
+
+    print('Using material {}'.format(material));
     simulation = Simulation(pnm,
+        material = material,
         sqrt_factor = args.sqrt_factor,
         max_time = args.max_time,
         time_step = args.time_step,

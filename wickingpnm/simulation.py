@@ -4,13 +4,22 @@ import matplotlib.pyplot as plt
 from collections import deque
 
 class Material:
-    def __init__(self, eta, gamma, theta, px):
+    def __init__(self,
+            eta = 1,
+            gamma = 72.6,
+            theta = 50,
+            px = 2.75E-6
+        ):
         # General physical constants (material-dependent)
         self.eta = eta # (mPa*s) dynamic viscosity of water
         self.gamma = gamma # (mN/m) surface tension of water
         self.theta = theta
         self.cos_theta = np.cos(np.radians(theta)) # Young's contact angle
         self.px = px # (m)
+
+    def __str__(self):
+        return "Material(eta = {}, gamma = {}, theta = {}, px = {})"\
+            .format(self.eta, self.gamma, self.theta, self.px)
 
     ## function to calculate the resistance of a full pore
     def poiseuille_resistance(self, l, r):
@@ -31,17 +40,14 @@ class Material:
 
 class Simulation:
     def __init__(self, pnm,
+            material = Material(),
             sqrt_factor = 0,
             max_time = 1600,
             time_step = 1E-2,
-            eta = 1,
-            gamma = 72.6,
-            theta = 50,
-            px = 2.75E-6,
             verbose = False
         ):
         self.pnm = pnm
-        self.material = Material(eta, gamma, theta, px)
+        self.material = material
         self.sqrt_factor = sqrt_factor
         self.max_time = max_time
         self.time_step = time_step
