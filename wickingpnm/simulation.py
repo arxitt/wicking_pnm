@@ -165,10 +165,11 @@ class Simulation:
             # TODO: Stop when the filling slows down meaningfully
             V[step] = self.material.total_volume(h[self.node_ids], r[self.node_ids])
             step += 1
+            # TODO: Make time non-linear for fewer steps
             t += dt
 
-        return [time, V]
-    
+        return np.array([time, V, self.pnm.waiting_times])
+
     ## TODO: Have the plot functions take an optional figure as argument
 
     def plot_simulation(self, results):
@@ -217,10 +218,11 @@ class Simulation:
         # compare to experimental data
         plt.figure()
         vxm3 = self.material.px**3
-        test = np.array(results)
-        std = test[:,1,:].std(axis=0)
-        mean = test[:,1,:].mean(axis=0)
-        time_line = test[0,0,:]
+        test_data = np.array(results)
+        std = test_data[:,1].std(axis=0)
+        mean = test_data[:,1].mean(axis=0)
+        # TODO: Replace with test_data[:,0] when we have non-linear time
+        time_line = test_data[0,0]
         alpha = 0.2 if self.plot_sqrt else 1
 
         # Configure the axes
@@ -236,7 +238,8 @@ class Simulation:
             plt.plot(xsqrt, ysqrt, dashes = (5, 5), color = sqrt_col, alpha = 1)
 
         if self.pnm.data is not None:
-            (self.pnm.data['volume'].sum(axis = 0)*vxm3).plot(color='k')
+            Vexp = vxm3*self.pnm.data['volume'].sum(axis = 0)
+            Vexp.plot(color='k')
 
         plt.title('Comparison between the absorbed volume and the experimental data')
         return plt
