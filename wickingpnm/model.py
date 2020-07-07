@@ -112,7 +112,7 @@ class PNM:
             self.generate_pore_data()
 
         self.generate_waiting_times()
-        self.build_inlets(inlets_count)  #amount of inlets should be an adjustable argument or a fraction of the total number of nodes
+        self.build_inlets(inlets_count)
 
     def extract_throat_list(self, label_matrix, labels): 
         """
