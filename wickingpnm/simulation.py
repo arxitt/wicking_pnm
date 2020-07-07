@@ -236,10 +236,11 @@ class Simulation:
 
         if self.plot_sqrt:
             plt.plot(xsqrt, ysqrt, dashes = (5, 5), color = sqrt_col, alpha = 1)
-
-        if self.pnm.data is not None:
-            Vexp = vxm3*self.pnm.data['volume'].sum(axis = 0)
-            Vexp.plot(color='k')
+        
+        if 'volume' in self.pnm.data:
+            if self.pnm.data is not None:
+                Vexp = vxm3*self.pnm.data['volume'].sum(axis = 0)
+                Vexp.plot(color='k')
 
         plt.title('Comparison between the absorbed volume and the experimental data')
         return plt

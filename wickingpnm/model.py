@@ -101,7 +101,7 @@ class PNM:
             self.generate_pore_data()
 
         self.generate_waiting_times()
-        self.build_inlets()
+        self.build_inlets()  #amount of inlets should be an adjustable argument or a fraction of the total number of nodes
 
     def extract_throat_list(self, label_matrix, labels): 
         """
@@ -138,7 +138,7 @@ class PNM:
         pores = deque()
         bounding_boxes = deque()
         for pore in crude_pores:
-            bb = extend_bounding_box(pore, im.shape)
+            if pore is not None: bb = extend_bounding_box(pore, im.shape)
             if pore is not None and len(np.unique(im[bb])) > 2:
                 pores.append(pore)
                 bounding_boxes.append(bb)
