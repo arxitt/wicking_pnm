@@ -26,7 +26,7 @@ if __name__ == '__main__':
     parser.add_argument('-c', '--iteration-count', type = int, default = 1, help = 'The amount of times to run the simulation (default to 1)')
     parser.add_argument('-s', '--time-step', type = float, default = 1E-3, help = 'The atomic time step to use throughout the simulation in seconds (default to 0.001)')
     parser.add_argument('-t', '--max-time', type = float, default = 1600, help = 'The amount of time to simulate in seconds (default to 1600)')
-    parser.add_argument('-R', '--upstream-resistance', type = int, default = 2E17, help = 'Upstream resistance affecting the inlet pores (default to 2E17)')
+    parser.add_argument('-R', '--upstream-resistance', type = float, default = 2E17, help = 'Upstream resistance affecting the inlet pores (default to 2E17)')
     parser.add_argument('-i', '--inlets', type = str, default = '', help = 'Labels for inlet pores (random by default)')
     parser.add_argument('-m', '--material', type = str, default = '', help = 'Material parameters written as eta,gamma,theta,px')
     parser.add_argument('-j', '--job-count', type = int, default = 4, help = 'The amount of jobs to use (default to 4)')
