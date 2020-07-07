@@ -27,7 +27,8 @@ if __name__ == '__main__':
     parser.add_argument('-s', '--time-step', type = float, default = 1E-3, help = 'The atomic time step to use throughout the simulation in seconds (default to 0.001)')
     parser.add_argument('-t', '--max-time', type = float, default = 1600, help = 'The amount of time to simulate in seconds (default to 1600)')
     parser.add_argument('-R', '--upstream-resistance', type = float, default = 2E17, help = 'Upstream resistance affecting the inlet pores (default to 2E17)')
-    parser.add_argument('-i', '--inlets', type = str, default = '', help = 'Labels for inlet pores (random by default)')
+    parser.add_argument('-i', '--inlets', type = str, default = '', help = 'Labels for inlet pores (random by default, ignores -ci)')
+    parser.add_argument('-ci', '--inlets-count', type = str, default = 5, help = 'The amount of inlet pores to generate (default to 5)')
     parser.add_argument('-m', '--material', type = str, default = '', help = 'Material parameters written as eta,gamma,theta,px')
     parser.add_argument('-j', '--job-count', type = int, default = 4, help = 'The amount of jobs to use (default to 4)')
     parser.add_argument('-E', '--exp-data', default = None, help = 'Path to the experimental data')
@@ -59,6 +60,7 @@ if __name__ == '__main__':
         'exp_data_path': args.exp_data,
         'pore_data_path': args.pore_data,
         'inlets': inlets,
+        'inlets_count': args.inlets_count,
         'R_inlet': R_inlet,
         'job_count': job_count,
         'verbose': verbose
@@ -69,8 +71,8 @@ if __name__ == '__main__':
 
     if args.generate_network:
         print('Generating an artificial network');
-        n = args.node_count
-        pnm_params['graph'] = nx.random_regular_graph(4, n)
+        n = int(args.node_count**(1/3))
+        pnm_params['graph'] = nx.grid_graph(dim = [n, n, n])
     elif pnm_params['exp_data_path'] is None:
         raise ValueError('Please use either -G or -E to choose a graph model')
 

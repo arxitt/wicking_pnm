@@ -54,10 +54,7 @@ class Simulation:
         self.verbose = verbose
 
         # this part is necessary to match the network pore labels to the pore property arrays
-        nodes = self.nodes = np.array(pnm.graph.nodes)
-        self.n_init = nodes.max() + 1
-        self.node_ids = np.array(nodes)
-        self.node_ids.sort()
+        self.n_init = pnm.labels.max() + 1
 
         # create new pore property arrays where the pore label corresponds to the array index
         # this copuld be solved more elegantly with xarray, but the intention was that it works
@@ -70,9 +67,9 @@ class Simulation:
         self.h0 = np.zeros(n)
 
         i = 0
-        for node_id in self.node_ids:
-            self.r[node_id] = pnm.radi[i]
-            self.h0[node_id] = pnm.heights[i]
+        for node in pnm.labels:
+            self.r[node] = pnm.radi[i]
+            self.h0[node] = pnm.heights[i]
             i += 1
 
         self.plot_sqrt = sqrt_factor > 0
@@ -152,7 +149,7 @@ class Simulation:
                         h[node] = h0[node]
                         filled[node] = True
                         finished.append(node)
-                        newly_active += pnm.graph.neighbors(node)
+                        newly_active += pnm.neighbour_labels(node)
 
             for node in finished:
                 if self.verbose:
@@ -163,7 +160,7 @@ class Simulation:
 
             time[step] = t
             # TODO: Stop when the filling slows down meaningfully
-            V[step] = self.material.total_volume(h[self.node_ids], r[self.node_ids])
+            V[step] = self.material.total_volume(h[pnm.labels], r[pnm.labels])
             step += 1
             # TODO: Make time non-linear for fewer steps
             t += dt

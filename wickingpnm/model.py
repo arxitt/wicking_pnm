@@ -59,6 +59,7 @@ class PNM:
         exp_data_path = None,
         pore_data_path = None,
         inlets = [],
+        inlets_count = 5,
         R_inlet = 1E17,
         job_count = 4,
         verbose = False
@@ -93,6 +94,16 @@ class PNM:
             self.data = xr.load_dataset(exp_data_path)
             self.generate_graph(self.data)
 
+        self.nodes = {}
+        self.label_dict = {}
+        i = 0
+        for node in self.graph.nodes():
+            self.nodes[i] = node
+            self.label_dict[node] = i
+            i += 1
+
+        self.labels = np.arange(len(self.nodes))
+
         if pore_data_path is not None:
             print('Reading the pore dataset at {}'.format(pore_data_path))
             pore_data = xr.load_dataset(pore_data_path)
@@ -101,7 +112,7 @@ class PNM:
             self.generate_pore_data()
 
         self.generate_waiting_times()
-        self.build_inlets()  #amount of inlets should be an adjustable argument or a fraction of the total number of nodes
+        self.build_inlets(inlets_count)  #amount of inlets should be an adjustable argument or a fraction of the total number of nodes
 
     def extract_throat_list(self, label_matrix, labels): 
         """
@@ -176,7 +187,7 @@ class PNM:
             if self.verbose:
                 print('Filling the graph with random pore data')
 
-            size = len(self.graph.nodes)
+            size = len(self.labels)
             re = self.radi = np.random.rand(size)
             h0e = self.heights = np.random.rand(size)
             for i in range(size):
@@ -192,7 +203,7 @@ class PNM:
             self.heights = px*pore_data['value_properties'].sel(property = 'major_axis').data
 
     def generate_waiting_times(self):
-        size = np.array(np.unique(self.graph.nodes)).max() + 1
+        size = self.labels[-1] + 1
         data = self.waiting_times_data
 
         if self.randomize_waiting_times or data is None or len(data) == 0:
@@ -205,7 +216,7 @@ class PNM:
             func = interp1d(ecdf.y[1:], ecdf.x[1:], fill_value = 'extrapolate')
             self.waiting_times = func(np.random.rand(size))
 
-    def build_inlets(self, amount = 5):
+    def build_inlets(self, amount):
         inlets = np.array(self.inlets, dtype = np.int)
         if not np.any(inlets):
             self.generate_inlets(amount)
@@ -214,14 +225,22 @@ class PNM:
             temp_inlets = deque()
             print('Taking inlets from command-line arguments.')
             for inlet in inlets:
-                if inlet in self.graph:
+                if self.nodes[inlet] in self.graph:
                     temp_inlets.append(inlet)
             self.inlets = np.array(temp_inlets)
 
     # TODO: Change this to start with one random inlet and some amount of distant neighbours
     def generate_inlets(self, amount):
         print('Generating {} inlets'.format(amount))
-        self.inlets = random.sample(self.graph.nodes, amount)
+        self.inlets = random.sample(list(self.labels), amount)
+
+    def neighbour_labels(self, node):
+        neighbour_nodes = self.graph.neighbors(self.nodes[node])
+        neighbours = deque()
+        for neighbour in neighbour_nodes:
+            neighbours.append(self.label_dict[neighbour])
+
+        return neighbours
 
     def outlet_resistances(self):
         """
@@ -255,8 +274,8 @@ class PNM:
 
         next_layer = deque()
         for node in layer:
-            neighbours = self.graph.neighbors(node)
             inv_R_eff = np.float64(0)
+            neighbours = self.neighbour_labels(node)
 
             if self.verbose:
                 print('visiting node', node)
