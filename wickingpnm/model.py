@@ -99,10 +99,10 @@ class PNM:
         i = 0
         for node in self.graph.nodes():
             self.nodes[i] = node
-            self.label_dict[node] = i
+            self.label_dict[node] = i      #do you make use of this look-up dict?
             i += 1
 
-        self.labels = np.arange(len(self.nodes))
+        self.labels = np.arange(len(self.nodes)) #I think this line is to blame
 
         if pore_data_path is not None:
             print('Reading the pore dataset at {}'.format(pore_data_path))
@@ -203,7 +203,7 @@ class PNM:
             self.heights = px*pore_data['value_properties'].sel(property = 'major_axis').data
 
     def generate_waiting_times(self):
-        size = self.labels[-1] + 1
+        size = self.labels[-1] + 1 #this size should probably be the largest value in the self.label_dict? Otherwise the array is too short
         data = self.waiting_times_data
 
         if self.randomize_waiting_times or data is None or len(data) == 0:
@@ -225,7 +225,7 @@ class PNM:
             temp_inlets = deque()
             print('Taking inlets from command-line arguments.')
             for inlet in inlets:
-                if self.nodes[inlet] in self.graph:
+                if inlet in self.graph:
                     temp_inlets.append(inlet)
             self.inlets = np.array(temp_inlets)
 
