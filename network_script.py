@@ -73,6 +73,7 @@ if __name__ == '__main__':
         print('Generating an artificial network');
         n = int(args.node_count**(1/3))
         pnm_params['graph'] = nx.grid_graph(dim = [n, n, n])
+        # we need the option to choose different graph types
     elif pnm_params['exp_data_path'] is None:
         raise ValueError('Please use either -G or -E to choose a graph model')
 
@@ -117,3 +118,5 @@ if __name__ == '__main__':
 
     if not args.no_plot:
         simulation.plot_all(results)
+        
+    # we definitely a way to store the data, ideally as hdf5/netcdf4
