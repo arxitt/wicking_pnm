@@ -11,6 +11,9 @@ import numpy as np
 import scipy as sp
 from scipy.interpolate import interp1d
 
+def get_diff_data(file):
+    return xr.load_dataset(file)
+
 def weighted_ecdf(data, weight = False):
     """
     input: 1D arrays of data and corresponding weights
@@ -42,17 +45,7 @@ def generalized_gamma(x, xm, d, b, x0):
     y= b/xm**d/sp.special.gamma(d/b)*(x-x0)**(d-1)*np.exp(-((x-x0)/xm)**b)
     return y
 
-
-
-sample = 'T3_025_3_III' #sample name, get e.g. by dyn_data.attrs['name']
-path = r"W:\Robert_TOMCAT_3_netcdf4_archives\processed_1200_dry_seg_aniso_sep"
-
-file = os.path.join(path, ''.join(['peak_diff_data_',sample,'.nc']))
-
-diff_data = xr.load_dataset(file)
-
-
-def waiting_time_from_ecdf(diff_data, n):
+def from_ecdf(diff_data, n):
     """
     
     Parameters
@@ -86,8 +79,7 @@ def waiting_time_from_ecdf(diff_data, n):
     
     return waiting_times
 
-
-def waiting_time_from_gamma_fit(n, p=[56.97385398, 0.77929465,  0.84938767,  6.999599  ]):
+def from_gamma_fit(n, p=[56.97385398, 0.77929465,  0.84938767,  6.999599]):
     """
     
 

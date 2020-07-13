@@ -9,6 +9,9 @@ from skimage.morphology import cube
 from scipy.interpolate import interp1d
 from statsmodels.distributions.empirical_distribution import ECDF
 from joblib import Parallel, delayed
+from os import path
+
+import wickingpnm.waitingtimes as waitingtimes
 
 def label_function(struct, pore_object, label, verbose = False):
     mask = pore_object == label
@@ -31,50 +34,33 @@ def label_function(struct, pore_object, label, verbose = False):
 
     return connections
 
-class PNMStats:
-    def __init__(self, path):
-        # waiting time statistics
-        self.delta_t_025 = np.array([])
-        self.delta_t_100 = np.array([])
-        self.delta_t_300 = np.array([])
-        self.delta_t_all = np.array([])
-
-        print('Reading the statistics dataset at {}'.format(path))
-        stats_dataset = xr.load_dataset(path)
-
-        for key in list(stats_dataset.coords):
-            if not key[-2:] == '_t': continue
-            if key[3:6] == '025':
-                self.delta_t_025 = np.concatenate([self.delta_t_025, stats_dataset[key].data])
-            if key[3:6] == '100':
-                self.delta_t_100 = np.concatenate([self.delta_t_100, stats_dataset[key].data])
-            if key[3:6] == '300':
-                self.delta_t_300 = np.concatenate([self.delta_t_300, stats_dataset[key].data])
-
-        self.delta_t_all = stats_dataset['deltatall'].data
-
 class PNM:
-    def __init__(self, stats_path,
+    def __init__(self,
         graph = None,
-        exp_data_path = None,
-        pore_data_path = None,
+        data_path = None,
+        sample = None,
         inlets = [],
-        inlets_count = 5,
+        inlet_count = 5,
         R_inlet = 1E17,
         job_count = 4,
+        rand_exp_data = False,
+        rand_pore_props = False,
+        rand_waiting_times = False,
         verbose = False
     ):
         self.job_count = job_count
         self.verbose = verbose
 
-        self.stats = None
-        self.randomize_waiting_times = True
-        self.waiting_times_data = None
+        self.data_path = data_path
+        self.sample = sample
+        self.exp_data_path = path.join(data_path, 'dyn_data', 'dyn_data_' + sample + '.nc')
+        self.pore_props_path = path.join(data_path, 'pore_props', 'pore_props_' + sample + '.nc')
+        self.pore_diff_path = path.join(data_path, 'pore_diffs', 'peak_diff_data_' + sample + '.nc')
 
-        if stats_path is not None:
-            self.stats = PNMStats(stats_path)
-            self.waiting_times_data = self.stats.delta_t_all
-            self.randomize_waiting_times = False
+        self.randomize_waiting_times = rand_waiting_times
+        self.pore_diff_data = None
+        if path.isfile(self.pore_diff_path) and not rand_waiting_times:
+            self.pore_diff_data = waitingtimes.get_diff_data(self.pore_diff_path)
 
         self.graph = graph
         self.data = None
@@ -89,9 +75,9 @@ class PNM:
         self.radi = None
         self.heights = None
 
-        if exp_data_path is not None:
-            print('Reading the experimental dataset at {}'.format(exp_data_path))
-            self.data = xr.load_dataset(exp_data_path)
+        if path.isfile(self.exp_data_path) and not rand_exp_data:
+            print('Reading the experimental dataset at {}'.format(self.exp_data_path))
+            self.data = xr.load_dataset(self.exp_data_path)
             self.generate_graph(self.data)
 
         self.nodes = {}
@@ -104,15 +90,15 @@ class PNM:
 
         self.labels = np.arange(len(self.nodes))
 
-        if pore_data_path is not None:
-            print('Reading the pore dataset at {}'.format(pore_data_path))
-            pore_data = xr.load_dataset(pore_data_path)
+        if path.isfile(self.pore_props_path) and not rand_pore_props:
+            print('Reading the pore dataset at {}'.format(self.pore_props_path))
+            pore_data = xr.load_dataset(self.pore_props_path)
             self.generate_pore_data(pore_data)
         else:
             self.generate_pore_data()
 
         self.generate_waiting_times()
-        self.build_inlets(inlets_count)
+        self.build_inlets(inlet_count)
 
     def extract_throat_list(self, label_matrix, labels): 
         """
@@ -212,18 +198,17 @@ class PNM:
            # analogous for the heights
 
     def generate_waiting_times(self):
-        size = self.labels[-1] + 1
-        data = self.waiting_times_data
+        size = self.labels.max() + 1
+        data = self.pore_diff_data
 
-        if self.randomize_waiting_times or data is None or len(data) == 0:
-            wt = self.waiting_times = np.random.rand(size)
+        if self.randomize_waiting_times or data is None:
+            print('Using random waiting times.')
+            times = self.waiting_times = np.random.rand(size)
             for i in range(size):
-                wt[i] *= 10**np.random.randint(-1, 3)
+                times[i] *= 10**np.random.randint(-1, 3)
         else:
-            # assign a random waiting time to every pore based on the experimental distribution
-            ecdf = ECDF(data)
-            func = interp1d(ecdf.y[1:], ecdf.x[1:], fill_value = 'extrapolate')
-            self.waiting_times = func(np.random.rand(size))
+            print('Generating waiting times from ECDF distribution')
+            self.waiting_times = waitingtimes.from_ecdf(data, len(self.labels))
 
     def build_inlets(self, amount):
         inlets = np.array(self.inlets, dtype = np.int)
