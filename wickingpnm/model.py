@@ -197,10 +197,19 @@ class PNM:
         else:
             if self.verbose:
                 print('Using experimental pore data')
-
+            # This crashes the simulation if there are more nodes in the artificial graph than in the experimental data set
             px = pore_data.attrs['voxel'].data
             self.radi = px*np.sqrt(pore_data['value_properties'].sel(property = 'median_area').data/np.pi)
             self.heights = px*pore_data['value_properties'].sel(property = 'major_axis').data
+            
+            # better do something like:
+            #if Graph is artificial: (I am usually lazy and just put a flag)
+            #   radi = px*np.sqrt(pore_data['value_properties'].sel(property = 'median_area').data/np.pi)
+            #   ecdf = ECDF(radi)
+            #   func = interp1d(ecdf.y[1:], ecdf.x[1:], fill_value = 'extrapolate')
+            #   self.radi = func(np.random.rand(size))
+                             
+           # analogous for the heights
 
     def generate_waiting_times(self):
         size = self.labels[-1] + 1
