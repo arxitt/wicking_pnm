@@ -51,8 +51,9 @@ class PNM:
         self.job_count = job_count
         self.verbose = verbose
 
-        self.data_path = data_path
-        self.sample = sample
+        self.data_path = data_path # Head directory for the data
+        self.sample = sample # Sample name
+
         self.exp_data_path = path.join(data_path, 'dyn_data', 'dyn_data_' + sample + '.nc')
         self.pore_props_path = path.join(data_path, 'pore_props', 'pore_props_' + sample + '.nc')
         self.pore_diff_path = path.join(data_path, 'pore_diffs', 'peak_diff_data_' + sample + '.nc')
@@ -80,14 +81,15 @@ class PNM:
             self.data = xr.load_dataset(self.exp_data_path)
             self.generate_graph(self.data)
 
-        self.nodes = {}
-        self.label_dict = {}
+        self.nodes = {} # Dictionary translating labels to graph nodes
+        self.label_dict = {} # Dictionary translating graph nodes to labels
         i = 0
         for node in self.graph.nodes():
             self.nodes[i] = node
             self.label_dict[node] = i
             i += 1
 
+        # self.labels contains the list of unique identifiers for the nodes
         self.labels = np.arange(len(self.nodes))
 
         if path.isfile(self.pore_props_path) and not rand_pore_props:
@@ -181,21 +183,17 @@ class PNM:
                 h0e[i] /= 10**np.random.randint(4, 5)
 
         else:
-            if self.verbose:
-                print('Using experimental pore data')
-            # This crashes the simulation if there are more nodes in the artificial graph than in the experimental data set
+            print('Using experimental pore data')
+
             px = pore_data.attrs['voxel'].data
-            self.radi = px*np.sqrt(pore_data['value_properties'].sel(property = 'median_area').data/np.pi)
-            self.heights = px*pore_data['value_properties'].sel(property = 'major_axis').data
-            
-            # better do something like:
-            #if Graph is artificial: (I am usually lazy and just put a flag)
-            #   radi = px*np.sqrt(pore_data['value_properties'].sel(property = 'median_area').data/np.pi)
-            #   ecdf = ECDF(radi)
-            #   func = interp1d(ecdf.y[1:], ecdf.x[1:], fill_value = 'extrapolate')
-            #   self.radi = func(np.random.rand(size))
-                             
-           # analogous for the heights
+            radi = self.radi = px*np.sqrt(pore_data['value_properties'].sel(property = 'median_area').data/np.pi)
+            heights = self.heights = px*pore_data['value_properties'].sel(property = 'major_axis').data
+            size = self.labels.max() + 1
+            if len(radi) < size:
+                print('Initializing pore props from ECDF distribution')
+                ecdf_radi, ecdf_heights = ECDF(radi), ECDF(heights)
+                self.radi = interp1d(ecdf_radi.y[1:], ecdf_radi.x[1:], fill_value = 'extrapolate')(np.random.rand(size))
+                self.heights = interp1d(ecdf_heights.y[1:], ecdf_heights.x[1:], fill_value = 'extrapolate')(np.random.rand(size))
 
     def generate_waiting_times(self):
         size = self.labels.max() + 1
