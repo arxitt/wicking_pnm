@@ -173,7 +173,7 @@ class PNM:
             if self.verbose:
                 print('Filling the graph with random pore data')
 
-            size = len(self.labels)
+            size = self.labels.max() + 1
             re = self.radi = np.random.rand(size)
             h0e = self.heights = np.random.rand(size)
             for i in range(size):
@@ -210,7 +210,7 @@ class PNM:
             print('Generating waiting times from ECDF distribution')
             self.waiting_times = waitingtimes.from_ecdf(data, len(self.labels))
 
-    def build_inlets(self, amount):
+    def build_inlets(self, amount = 5):
         inlets = np.array(self.inlets, dtype = np.int)
         if not np.any(inlets):
             self.generate_inlets(amount)

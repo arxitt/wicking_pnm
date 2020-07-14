@@ -36,7 +36,8 @@ if __name__ == '__main__':
     parser.add_argument('-s', '--time-step', type = float, default = 1E-3, help = 'The atomic time step to use throughout the simulation in seconds (default to 0.001)')
     parser.add_argument('-t', '--max-time', type = float, default = 1600, help = 'The amount of time to simulate in seconds (default to 1600)')
     parser.add_argument('-i', '--inlets', type = str, default = '', help = 'Labels for inlet pores (random by default, ignores -ci)')
-    parser.add_argument('-Ci', '--inlet-count', type = str, default = 5, help = 'The amount of inlet pores to generate (default to 5)')
+    parser.add_argument('-In', '--inlet-nodes', type = str, default = '', help = 'Node names for inlet pores (only with 1D graphs, ignores -i and -ci)')
+    parser.add_argument('-Ic', '--inlet-count', type = str, default = 5, help = 'The amount of inlet pores to generate (default to 5)')
     parser.add_argument('-Re', '--random-exp-data', action = 'store_true', help = 'Randomize the experimental data')
     parser.add_argument('-Rp', '--random-pore-props', action = 'store_true', help = 'Randomize the pore properties')
     parser.add_argument('-Rwt', '--random-waiting-times', action = 'store_true', help = 'Randomize the waiting times')
@@ -56,7 +57,8 @@ if __name__ == '__main__':
     ### Initialize the PNM
     results = []
     R_inlet = args.upstream_resistance # Pas/m3
-    inlets = args.inlets.split(',') # Previously [162, 171, 207]
+    inlet_nodes = args.inlet_nodes.split(',') # Previously [162, 171, 207]
+    inlets = args.inlets.split(',')
     if '' in inlets:
         inlets = []
     else:
@@ -85,6 +87,18 @@ if __name__ == '__main__':
             raise ValueError('Invalid graph function passed to -G.')
 
     pnm = PNM(**pnm_params)
+
+    if inlet_nodes:
+        print('Using inlet names:', inlet_nodes)
+
+        inlets = []
+        for inlet in inlet_nodes:
+            inlets.append(pnm.label_dict[int(inlet)])
+
+        print('Got inlet labels:', inlets)
+
+        pnm.inlets = inlets
+        pnm.build_inlets()
 
     if verbose:
         print('\nre', pnm.radi, '\n')
