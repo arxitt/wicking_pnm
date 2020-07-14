@@ -24,6 +24,7 @@ graph_functions = {
 if __name__ == '__main__':
     ### Parse arguments
     parser = argparse.ArgumentParser(description = 'Simulation parameters')
+    parser.add_argument('-o', '--output-file', type = str, default = '', help = 'The path of a file to create and save the results in numpy format. The file can be loaded back with numpy.load')
     parser.add_argument('-D', '--data-path', type = str, default = './data', help = 'Path to the data files (default to ./data)')
     parser.add_argument('-S', '--sample', type = str, default = 'T3_025_3_III', help = 'Sample name (default to T3_025_3_III)')
     parser.add_argument('-G', '--generate-network', type = str, default = '', help = 'Generate an artificial pore network model using the given function')
@@ -144,4 +145,5 @@ if __name__ == '__main__':
     if not args.no_plot:
         simulation.plot_all(results)
 
-    # TODO: Make a way to store the data, ideally as hdf5/netcdf4
+    if args.output_file:
+        np.save(args.output_file, results)
