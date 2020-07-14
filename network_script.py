@@ -93,7 +93,11 @@ if __name__ == '__main__':
 
         inlets = []
         for inlet in inlet_nodes:
-            inlets.append(pnm.label_dict[int(inlet)])
+            inlet = int(inlet)
+            if inlet in pnm.label_dict:
+                inlets.append(pnm.label_dict[inlet])
+            else:
+                print('Failed to find node named', inlet)
 
         print('Got inlet labels:', inlets)
 
