@@ -89,7 +89,7 @@ if __name__ == '__main__':
 
     pnm = PNM(**pnm_params)
 
-    if inlet_nodes:
+    if args.inlet_nodes:
         print('Using inlet names:', inlet_nodes)
 
         inlets = []
@@ -124,8 +124,8 @@ if __name__ == '__main__':
     simulation = Simulation(pnm,
         material = material,
         sqrt_factor = args.sqrt_factor,
-        max_time = args.max_time,
-        time_step = args.time_step,
+        max_time = np.float64(args.max_time),
+        time_step = np.float64(args.time_step),
         verbose = verbose
     )
 

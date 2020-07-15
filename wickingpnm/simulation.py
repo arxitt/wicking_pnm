@@ -179,7 +179,7 @@ class Simulation:
         plt.title('Absorbed volume for each run')
         plt.xlabel('time [s]')
         plt.ylabel('volume [m3]')
-        plt.xlim(0.1, self.max_time)
+        plt.xlim(xmax = self.max_time)
         return plt
         
     def plot_simulation_logarithmic(self, results):
@@ -193,7 +193,7 @@ class Simulation:
         plt.title('Absorbed volume for each run (logarithmic)')
         plt.xlabel('time [s]')
         plt.ylabel('volume [m3]')
-        plt.xlim(0.1, self.max_time)
+        plt.xlim(xmax = self.max_time)
         return plt
 
     def plot_flux(self, results):
