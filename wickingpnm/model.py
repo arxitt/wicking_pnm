@@ -194,6 +194,8 @@ class PNM:
                 radi = self.radi = px*np.sqrt(pore_data['value_properties'].sel(property = 'median_area', label = list(self.label_dict.keys())).data/np.pi)
                 heights = self.heights = px*pore_data['value_properties'].sel(property = 'major_axis', label = list(self.label_dict.keys())).data   
             if len(radi) < size: #it would be nice to have this as an input option, e.g. we use the experimental graph, but the properties are random
+                #TODO: couple radii and heights because they correlate slightly, currently the pore resulting pore volumes are too small
+                # or, mix distribution functions of height, radius and volume. Something to think about ... for later ...
                 print('Initializing pore props from ECDF distribution')
                 ecdf_radi, ecdf_heights = ECDF(radi), ECDF(heights)
                 self.radi = interp1d(ecdf_radi.y[1:], ecdf_radi.x[1:], fill_value = 'extrapolate')(np.random.rand(size))
