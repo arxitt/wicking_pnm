@@ -189,6 +189,8 @@ class PNM:
             radi = self.radi = px*np.sqrt(pore_data['value_properties'].sel(property = 'median_area').data/np.pi)
             heights = self.heights = px*pore_data['value_properties'].sel(property = 'major_axis').data
             size = self.labels.max() + 1
+            
+            # TODO: these if-clauses are not robust, better a case selection based on input choice?
             if size < len(radi):
                 print('not all pores are connected, cleaning up heights and radii')
                 radi = self.radi = px*np.sqrt(pore_data['value_properties'].sel(property = 'median_area', label = list(self.label_dict.keys())).data/np.pi)
