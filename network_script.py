@@ -38,7 +38,7 @@ if __name__ == '__main__':
     parser.add_argument('-t', '--max-time', type = float, default = 1600, help = 'The amount of time to simulate in seconds (default to 1600)')
     parser.add_argument('-i', '--inlets', type = str, default = '', help = 'Labels for inlet pores (random by default, ignores -ci)')
     parser.add_argument('-In', '--inlet-nodes', type = str, default = '', help = 'Node names for inlet pores (only with 1D graphs, ignores -i and -ci)')
-    parser.add_argument('-Ic', '--inlet-count', type = str, default = 5, help = 'The amount of inlet pores to generate (default to 5)')
+    parser.add_argument('-Ic', '--inlet-count', type = int, default = 5, help = 'The amount of inlet pores to generate (default to 5)')
     parser.add_argument('-Re', '--random-exp-data', action = 'store_true', help = 'Randomize the experimental data')
     parser.add_argument('-Rp', '--random-pore-props', action = 'store_true', help = 'Randomize the pore properties')
     parser.add_argument('-Rwt', '--random-waiting-times', action = 'store_true', help = 'Randomize the waiting times')
