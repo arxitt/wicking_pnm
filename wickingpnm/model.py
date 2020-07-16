@@ -81,7 +81,7 @@ class PNM:
             self.data = xr.load_dataset(self.exp_data_path)
             self.generate_graph(self.data)
 
-        self.nodes = {} # Dictionary translating labels to graph nodes
+        self.nodes = {} # Dictionary translating labels to graph nodes. I am not sure if I quite understand, please review the correct use in lines 194&195, I need a list of the original labels
         self.label_dict = {} # Dictionary translating graph nodes to labels
         i = 0
         for node in self.graph.nodes():
@@ -189,7 +189,11 @@ class PNM:
             radi = self.radi = px*np.sqrt(pore_data['value_properties'].sel(property = 'median_area').data/np.pi)
             heights = self.heights = px*pore_data['value_properties'].sel(property = 'major_axis').data
             size = self.labels.max() + 1
-            if len(radi) < size:
+            if size < len(radi):
+                print('not all pores are connected, cleaning up heights and radii')
+                radi = self.radi = px*np.sqrt(pore_data['value_properties'].sel(property = 'median_area', label = list(self.label_dict.keys())).data/np.pi)
+                heights = self.heights = px*pore_data['value_properties'].sel(property = 'major_axis', label = list(self.label_dict.keys())).data   
+            if len(radi) < size: #it would be nice to have this as an input option, e.g. we use the experimental graph, but the properties are random
                 print('Initializing pore props from ECDF distribution')
                 ecdf_radi, ecdf_heights = ECDF(radi), ECDF(heights)
                 self.radi = interp1d(ecdf_radi.y[1:], ecdf_radi.x[1:], fill_value = 'extrapolate')(np.random.rand(size))
