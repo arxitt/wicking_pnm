@@ -46,23 +46,21 @@ class PNM:
         rand_exp_data = False,
         rand_pore_props = False,
         rand_waiting_times = False,
-        verbose = False,
-        new_graph_flag = True
+        verbose = False
     ):
         self.job_count = job_count
         self.verbose = verbose
-        self.new_graph_flag = new_graph_flag
 
         self.data_path = data_path # Head directory for the data
         self.sample = sample # Sample name
 
-        self.exp_data_path = path.join(data_path,  'dyn_data_' + sample + '.nc')
-        self.pore_props_path = path.join(data_path,  'pore_props_' + sample + '.nc')
-        self.pore_diff_path = path.join(data_path,  'peak_diff_data_' + sample + '.nc')
-        
-        #self.exp_data_path = path.join(data_path, 'dyn_data', 'dyn_data_' + sample + '.nc')
-        #self.pore_props_path = path.join(data_path, 'pore_props', 'pore_props_' + sample + '.nc')
-        #self.pore_diff_path = path.join(data_path, 'peak_diff', 'peak_diff_data_' + sample + '.nc')
+        self.dyn_data_dir, self.pore_props_dir, self.pore_diff_dir = \
+            'dyn_data', 'pore_props', 'peak_diff'
+        # self.dyn_data_dir, self.pore_props_dir, self.pore_diff_dir = '', '', ''
+
+        self.exp_data_path = path.join(data_path, 'dyn_data', 'dyn_data_' + sample + '.nc')
+        self.pore_props_path = path.join(data_path, 'pore_props', 'pore_props_' + sample + '.nc')
+        self.pore_diff_path = path.join(data_path, 'peak_diff', 'peak_diff_data_' + sample + '.nc')
 
         self.randomize_waiting_times = rand_waiting_times
         self.pore_diff_data = None
@@ -86,7 +84,6 @@ class PNM:
             print('Reading the experimental dataset at {}'.format(self.exp_data_path))
             self.data = xr.load_dataset(self.exp_data_path)
             self.generate_graph(self.data)
-            
 
         self.nodes = {} # Dictionary translating labels to graph nodes. I am not sure if I quite understand, please review the correct use in lines 194&195, I need a list of the original labels
         self.label_dict = {} # Dictionary translating graph nodes to labels
@@ -176,7 +173,7 @@ class PNM:
             throats = self.extract_throat_list(label_matrix, labels)
             self.graph = nx.Graph()
             self.graph.add_edges_from(np.uint16(throats[:,:2]))
-            self.new_graph_flag = False
+
     def generate_pore_data(self, pore_data = None):
         if pore_data is None:
             if self.verbose:
@@ -189,36 +186,32 @@ class PNM:
                 re[i] /= 10**np.random.randint(5, 6)
                 h0e[i] /= 10**np.random.randint(4, 5)
 
-        else:
-            print('Using experimental pore data')
+            return
 
-            px = pore_data.attrs['voxel'].data
-            radi = self.radi = px*np.sqrt(pore_data['value_properties'].sel(property = 'median_area').data/np.pi)
-            heights = self.heights = px*pore_data['value_properties'].sel(property = 'major_axis').data
-            size = self.labels.max() + 1
-            factor = 1
-            #corr = exp_data['sig_fit_data'].sel(sig_fit_var = 'alpha [vx]')/pore_data['value_properties'].sel(property = 'volume', label = exp_data['label'])
-            #pore_data['value_properties'].sel(property = 'median_area', label = exp_data['label']) = 1/corr*pore_data['value_properties'].sel(property = 'median_area', label = exp_data['label'])
-            #pore_data['value_properties'].sel(property = 'major_axis', label = exp_data['label']) = corr
-      
-            if self.new_graph_flag:
-                print('Initializing pore props from ECDF distribution')
-                ecdf_radi, ecdf_heights = ECDF(radi), ECDF(heights)
-                self.radi = interp1d(ecdf_radi.y[1:], ecdf_radi.x[1:], fill_value = 'extrapolate')(np.random.rand(size))/factor
-                self.heights = interp1d(ecdf_heights.y[1:], ecdf_heights.x[1:], fill_value = 'extrapolate')(np.random.rand(size))*factor**2
-                #self.radi = interp1d(ecdf_radi.y[1:], ecdf_radi.x[1:], fill_value = 'extrapolate')(0.7*np.ones(size))/factor    
-                #self.heights = interp1d(ecdf_heights.y[1:], ecdf_heights.x[1:], fill_value = 'extrapolate')(0.7*np.ones(size))*factor**2
-                
-            else:
-                print('not all pores are connected, cleaning up heights and radii')
-                radi = self.radi = px*np.sqrt(pore_data['value_properties'].sel(property = 'median_area', label = list(self.label_dict.keys())).data/np.pi)/factor
-                heights = self.heights = px*pore_data['value_properties'].sel(property = 'major_axis', label = list(self.label_dict.keys())).data*factor**2 
-                
-            #if len(radi) < size: #it would be nice to have this as an input option, e.g. we use the experimental graph, but the properties are random
-                #TODO: couple radii and heights because they correlate slightly, currently the pore resulting pore volumes are too small
-                # or, mix distribution functions of height, radius and volume. Something to think about ... for later ...
-            
+        print('Using experimental pore data')
 
+        factor = 1
+        px = pore_data.attrs['voxel'].data
+        radi = self.radi = factor*px*np.sqrt(pore_data['value_properties'].sel(property = 'median_area').data/np.pi)
+        heights = self.heights = px*pore_data['value_properties'].sel(property = 'major_axis').data*factor**2
+        size = self.labels.max() + 1
+
+        # Use random pores if there's no experimental data or if the graph is too big for the dataset
+        if self.data is not None or size < len(radi):
+            # corr = exp_data['sig_fit_data'].sel(sig_fit_var = 'alpha [vx]')/pore_data['value_properties'].sel(property = 'volume', label = exp_data['label'])
+            # pore_data['value_properties'].sel(property = 'median_area', label = exp_data['label']) = 1/corr*pore_data['value_properties'].sel(property = 'median_area', label = exp_data['label'])
+            # pore_data['value_properties'].sel(property = 'major_axis', label = exp_data['label']) = corr
+
+            print('Initializing pore props from ECDF distribution')
+
+            # TODO: couple radii and heights because they correlate slightly, currently the pore resulting pore volumes are too small
+            # or, mix distribution functions of height, radius and volume. Something to think about ... for later ...
+            ecdf_radi, ecdf_heights = ECDF(radi), ECDF(heights)
+            random_input = lambda size: np.random.rand(size)
+            factored_input = lambda size, factor: factor*np.ones(size) # factored_input(size, 0.7)
+
+            self.radi = interp1d(ecdf_radi.y[1:], ecdf_radi.x[1:], fill_value = 'extrapolate')(random_input(size))/factor
+            self.heights = interp1d(ecdf_heights.y[1:], ecdf_heights.x[1:], fill_value = 'extrapolate')(random_input(size))*factor**2
 
     def generate_waiting_times(self):
         size = self.labels.max() + 1
