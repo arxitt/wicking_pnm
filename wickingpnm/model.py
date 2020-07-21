@@ -54,13 +54,13 @@ class PNM:
         self.data_path = data_path # Head directory for the data
         self.sample = sample # Sample name
 
-        self.dyn_data_dir, self.pore_props_dir, self.pore_diff_dir = \
-            'dyn_data', 'pore_props', 'peak_diff'
-        # self.dyn_data_dir, self.pore_props_dir, self.pore_diff_dir = '', '', ''
+        dyn_data_dir, pore_props_dir, pore_diff_dir = \
+            'dyn_data', 'pore_props', 'pore_diffs'
+        # dyn_data_dir, pore_props_dir, pore_diff_dir = '', '', ''
 
-        self.exp_data_path = path.join(data_path, 'dyn_data', 'dyn_data_' + sample + '.nc')
-        self.pore_props_path = path.join(data_path, 'pore_props', 'pore_props_' + sample + '.nc')
-        self.pore_diff_path = path.join(data_path, 'peak_diff', 'peak_diff_data_' + sample + '.nc')
+        self.exp_data_path = path.join(data_path, dyn_data_dir, 'dyn_data_' + sample + '.nc')
+        self.pore_props_path = path.join(data_path, pore_props_dir, 'pore_props_' + sample + '.nc')
+        self.pore_diff_path = path.join(data_path, pore_diff_dir, 'peak_diff_data_' + sample + '.nc')
 
         self.randomize_waiting_times = rand_waiting_times
         self.pore_diff_data = None
@@ -197,7 +197,7 @@ class PNM:
         size = self.labels.max() + 1
 
         # Use random pores if there's no experimental data or if the graph is too big for the dataset
-        if self.data is not None or size < len(radi):
+        if self.data is not None:
             # corr = exp_data['sig_fit_data'].sel(sig_fit_var = 'alpha [vx]')/pore_data['value_properties'].sel(property = 'volume', label = exp_data['label'])
             # pore_data['value_properties'].sel(property = 'median_area', label = exp_data['label']) = 1/corr*pore_data['value_properties'].sel(property = 'median_area', label = exp_data['label'])
             # pore_data['value_properties'].sel(property = 'major_axis', label = exp_data['label']) = corr
