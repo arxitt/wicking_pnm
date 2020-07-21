@@ -18,7 +18,9 @@ from wickingpnm.simulation import Simulation, Material
 
 # TODO: Add more
 graph_functions = {
-    'random_regular_graph': lambda n: nx.random_regular_graph(4, n)
+    'random_regular_graph': lambda n: nx.random_regular_graph(4, n),
+    'regular_3D_grid': lambda n: nx.grid_graph([n,n,n]),
+    'watts_strogatz': lambda n: nx.watts_strogatz_graph(n, k=2, p=0.3, seed=None)
 }
 
 if __name__ == '__main__':

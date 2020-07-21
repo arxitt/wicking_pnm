@@ -46,17 +46,23 @@ class PNM:
         rand_exp_data = False,
         rand_pore_props = False,
         rand_waiting_times = False,
-        verbose = False
+        verbose = False,
+        new_graph_flag = True
     ):
         self.job_count = job_count
         self.verbose = verbose
+        self.new_graph_flag = new_graph_flag
 
         self.data_path = data_path # Head directory for the data
         self.sample = sample # Sample name
 
-        self.exp_data_path = path.join(data_path, 'dyn_data', 'dyn_data_' + sample + '.nc')
-        self.pore_props_path = path.join(data_path, 'pore_props', 'pore_props_' + sample + '.nc')
-        self.pore_diff_path = path.join(data_path, 'pore_diffs', 'peak_diff_data_' + sample + '.nc')
+        self.exp_data_path = path.join(data_path,  'dyn_data_' + sample + '.nc')
+        self.pore_props_path = path.join(data_path,  'pore_props_' + sample + '.nc')
+        self.pore_diff_path = path.join(data_path,  'peak_diff_data_' + sample + '.nc')
+        
+        #self.exp_data_path = path.join(data_path, 'dyn_data', 'dyn_data_' + sample + '.nc')
+        #self.pore_props_path = path.join(data_path, 'pore_props', 'pore_props_' + sample + '.nc')
+        #self.pore_diff_path = path.join(data_path, 'peak_diff', 'peak_diff_data_' + sample + '.nc')
 
         self.randomize_waiting_times = rand_waiting_times
         self.pore_diff_data = None
@@ -80,6 +86,7 @@ class PNM:
             print('Reading the experimental dataset at {}'.format(self.exp_data_path))
             self.data = xr.load_dataset(self.exp_data_path)
             self.generate_graph(self.data)
+            
 
         self.nodes = {} # Dictionary translating labels to graph nodes. I am not sure if I quite understand, please review the correct use in lines 194&195, I need a list of the original labels
         self.label_dict = {} # Dictionary translating graph nodes to labels
@@ -169,7 +176,7 @@ class PNM:
             throats = self.extract_throat_list(label_matrix, labels)
             self.graph = nx.Graph()
             self.graph.add_edges_from(np.uint16(throats[:,:2]))
-
+            self.new_graph_flag = False
     def generate_pore_data(self, pore_data = None):
         if pore_data is None:
             if self.verbose:
@@ -189,19 +196,29 @@ class PNM:
             radi = self.radi = px*np.sqrt(pore_data['value_properties'].sel(property = 'median_area').data/np.pi)
             heights = self.heights = px*pore_data['value_properties'].sel(property = 'major_axis').data
             size = self.labels.max() + 1
-            
-            # TODO: these if-clauses are not robust, better a case selection based on input choice?
-            if size < len(radi):
-                print('not all pores are connected, cleaning up heights and radii')
-                radi = self.radi = px*np.sqrt(pore_data['value_properties'].sel(property = 'median_area', label = list(self.label_dict.keys())).data/np.pi)
-                heights = self.heights = px*pore_data['value_properties'].sel(property = 'major_axis', label = list(self.label_dict.keys())).data   
-            if len(radi) < size: #it would be nice to have this as an input option, e.g. we use the experimental graph, but the properties are random
-                #TODO: couple radii and heights because they correlate slightly, currently the pore resulting pore volumes are too small
-                # or, mix distribution functions of height, radius and volume. Something to think about ... for later ...
+            factor = 1
+            #corr = exp_data['sig_fit_data'].sel(sig_fit_var = 'alpha [vx]')/pore_data['value_properties'].sel(property = 'volume', label = exp_data['label'])
+            #pore_data['value_properties'].sel(property = 'median_area', label = exp_data['label']) = 1/corr*pore_data['value_properties'].sel(property = 'median_area', label = exp_data['label'])
+            #pore_data['value_properties'].sel(property = 'major_axis', label = exp_data['label']) = corr
+      
+            if self.new_graph_flag:
                 print('Initializing pore props from ECDF distribution')
                 ecdf_radi, ecdf_heights = ECDF(radi), ECDF(heights)
-                self.radi = interp1d(ecdf_radi.y[1:], ecdf_radi.x[1:], fill_value = 'extrapolate')(np.random.rand(size))
-                self.heights = interp1d(ecdf_heights.y[1:], ecdf_heights.x[1:], fill_value = 'extrapolate')(np.random.rand(size))
+                self.radi = interp1d(ecdf_radi.y[1:], ecdf_radi.x[1:], fill_value = 'extrapolate')(np.random.rand(size))/factor
+                self.heights = interp1d(ecdf_heights.y[1:], ecdf_heights.x[1:], fill_value = 'extrapolate')(np.random.rand(size))*factor**2
+                #self.radi = interp1d(ecdf_radi.y[1:], ecdf_radi.x[1:], fill_value = 'extrapolate')(0.7*np.ones(size))/factor    
+                #self.heights = interp1d(ecdf_heights.y[1:], ecdf_heights.x[1:], fill_value = 'extrapolate')(0.7*np.ones(size))*factor**2
+                
+            else:
+                print('not all pores are connected, cleaning up heights and radii')
+                radi = self.radi = px*np.sqrt(pore_data['value_properties'].sel(property = 'median_area', label = list(self.label_dict.keys())).data/np.pi)/factor
+                heights = self.heights = px*pore_data['value_properties'].sel(property = 'major_axis', label = list(self.label_dict.keys())).data*factor**2 
+                
+            #if len(radi) < size: #it would be nice to have this as an input option, e.g. we use the experimental graph, but the properties are random
+                #TODO: couple radii and heights because they correlate slightly, currently the pore resulting pore volumes are too small
+                # or, mix distribution functions of height, radius and volume. Something to think about ... for later ...
+            
+
 
     def generate_waiting_times(self):
         size = self.labels.max() + 1
@@ -214,7 +231,7 @@ class PNM:
                 times[i] *= 10**np.random.randint(-1, 3)
         else:
             print('Generating waiting times from ECDF distribution')
-            self.waiting_times = waitingtimes.from_ecdf(data, len(self.labels))
+            self.waiting_times = waitingtimes.from_ecdf(data, len(self.labels))#*0
 
     def build_inlets(self, amount = 5):
         inlets = np.array(self.inlets, dtype = np.int)
@@ -282,7 +299,7 @@ class PNM:
 
             for neighbour in neighbours:
                 if neighbour in layer:
-                    inv_R_eff += 1/np.float64(self.R0[neighbour] + self.R_full[neighbour]) #<- you sure about this? you add a resistance to an inverse resistance
+                    inv_R_eff += 1/np.float64(self.R0[neighbour] + self.R_full[neighbour]) 
 
             self.R0[node] += 1/inv_R_eff
 
