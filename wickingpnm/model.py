@@ -192,7 +192,7 @@ class PNM:
 
         factor = 1
         px = pore_data.attrs['voxel'].data
-        radi = self.radi = factor*px*np.sqrt(pore_data['value_properties'].sel(property = 'median_area').data/np.pi)
+        radi = self.radi = px*np.sqrt(pore_data['value_properties'].sel(property = 'median_area').data/np.pi)*factor
         heights = self.heights = px*pore_data['value_properties'].sel(property = 'major_axis').data*factor**2
         size = self.labels.max() + 1
 
