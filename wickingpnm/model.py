@@ -197,7 +197,7 @@ class PNM:
         size = self.labels.max() + 1
 
         # Use random pores if there's no experimental data or if the graph is too big for the dataset
-        if self.data is not None:
+        if self.data is None:
             # corr = exp_data['sig_fit_data'].sel(sig_fit_var = 'alpha [vx]')/pore_data['value_properties'].sel(property = 'volume', label = exp_data['label'])
             # pore_data['value_properties'].sel(property = 'median_area', label = exp_data['label']) = 1/corr*pore_data['value_properties'].sel(property = 'median_area', label = exp_data['label'])
             # pore_data['value_properties'].sel(property = 'major_axis', label = exp_data['label']) = corr
