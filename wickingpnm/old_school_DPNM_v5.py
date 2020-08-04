@@ -66,7 +66,7 @@ def init_regular_grid(dim):
        
     r_i = np.ones(size)*1E-5 + np.random.rand(size)*1E-5
     lengths = np.ones(size)*1E-2 + np.random.rand(size)*1E-2
-    waiting_times = np.random.rand(size)*30
+    waiting_times = np.random.rand(size)*30+50
     inlets = np.arange(dim[0]*dim[1])
     
     return adj_matrix, r_i, lengths, waiting_times, inlets
@@ -128,12 +128,12 @@ def simulation(r_i, lengths, waiting_times, adj_matrix, inlets, timesteps, patm 
         mask[act_waiting] = 0
         masked = np.where(mask>0)[0]
         
-        #  check if there is any active pore
+        #  fast-foward if there is no active pore
         
         if not np.any(mask[acts] > 0):
-            time[t] = time[t-1] + dt
+            time[t] = activation_time[activation_time>time[t-1]].min()
+            
             V[t] = V[t-1]
-            dt = dt+dt
             continue 
         
                
@@ -198,5 +198,5 @@ def simulation(r_i, lengths, waiting_times, adj_matrix, inlets, timesteps, patm 
         
     return time, V, V0, activation_time, filling_time
 
-# adj_matrix, r_i, lengths, waiting_times, inlets = init_regular_grid(dim)  
-# time, V, V0, activation_time, filling_time = simulation(r_i, lengths, waiting_times, adj_matrix, inlets, timesteps)
+adj_matrix, r_i, lengths, waiting_times, inlets = init_regular_grid(dim)  
+time, V, V0, activation_time, filling_time = simulation(r_i, lengths, waiting_times, adj_matrix, inlets, timesteps)

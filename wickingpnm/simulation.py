@@ -107,7 +107,7 @@ class Simulation:
         graph = pnm.graph
         adj_matrix = nx.to_numpy_array(graph)
         inlets = pnm.inlets
-        timesteps = 100000
+        timesteps = 10000000
         
         
         time, V, V0, activation_time, filling_time = DPNM.simulation(r_i, lengths, waiting_times, adj_matrix, inlets, timesteps)
