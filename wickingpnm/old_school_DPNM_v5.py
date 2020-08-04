@@ -188,5 +188,5 @@ def simulation(r_i, lengths, waiting_times, adj_matrix, inlets, timesteps, patm 
         
     return time, V, V0, activation_time, filling_time
 
-adj_matrix, r_i, lengths, waiting_times, inlets = init_regular_grid(dim)  
-time, V, V0, activation_time, filling_time = simulation(r_i, lengths, waiting_times, adj_matrix, inlets, timesteps)
+#adj_matrix, r_i, lengths, waiting_times, inlets = init_regular_grid(dim)  
+#time, V, V0, activation_time, filling_time = simulation(r_i, lengths, waiting_times, adj_matrix, inlets, timesteps)
