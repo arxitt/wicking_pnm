@@ -58,9 +58,12 @@ class PNM:
             'dyn_data', 'pore_props', 'pore_diffs'
         # dyn_data_dir, pore_props_dir, pore_diff_dir = '', '', ''
 
-        self.exp_data_path = path.join(data_path, dyn_data_dir, 'dyn_data_' + sample + '.nc')
-        self.pore_props_path = path.join(data_path, pore_props_dir, 'pore_props_' + sample + '.nc')
-        self.pore_diff_path = path.join(data_path, pore_diff_dir, 'peak_diff_data_' + sample + '.nc')
+        # self.exp_data_path = path.join(data_path, dyn_data_dir, 'dyn_data_' + sample + '.nc')
+        # self.pore_props_path = path.join(data_path, pore_props_dir, 'pore_props_' + sample + '.nc')
+        # self.pore_diff_path = path.join(data_path, pore_diff_dir, 'peak_diff_data_' + sample + '.nc')
+        self.exp_data_path = path.join(data_path, 'dyn_data_' + sample + '.nc')
+        self.pore_props_path = path.join(data_path,  'pore_props_' + sample + '.nc')
+        self.pore_diff_path = path.join(data_path, 'peak_diff_data_' + sample + '.nc')
 
         self.randomize_waiting_times = rand_waiting_times
         self.pore_diff_data = None
@@ -224,7 +227,7 @@ class PNM:
                 times[i] *= 10**np.random.randint(-1, 3)
         else:
             print('Generating waiting times from ECDF distribution')
-            self.waiting_times = waitingtimes.from_ecdf(data, len(self.labels))#*0
+            self.waiting_times = waitingtimes.from_ecdf(data, len(self.labels))
 
     def build_inlets(self, amount = 5):
         inlets = np.array(self.inlets, dtype = np.int)

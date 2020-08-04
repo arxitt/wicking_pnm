@@ -16,6 +16,7 @@ gamma = 72E-3 #N/m
 n = 4
 a = 2
 cos = np.cos(48/180*np.pi)
+R0 = 0
 
 timesteps = 100000
 patm = 101.325E3 #Pa
@@ -62,19 +63,16 @@ def init_regular_grid(dim):
     size = len(graph.nodes)
     
     adj_matrix = nx.to_numpy_array(graph)
-    
-    # r_i = np.random.rand(size)*1E-5
-    # lengths = np.random.rand(size)*1E-2
-    
-    r_i = np.ones(size)*1E-5# + np.random.rand(size)*1E-5
-    lengths = np.ones(size)*1E-2# + np.random.rand(size)*1E-2
-    waiting_times = np.random.rand(size)*0
+       
+    r_i = np.ones(size)*1E-5 + np.random.rand(size)*1E-5
+    lengths = np.ones(size)*1E-2 + np.random.rand(size)*1E-2
+    waiting_times = np.random.rand(size)*30
     inlets = np.arange(dim[0]*dim[1])
     
     return adj_matrix, r_i, lengths, waiting_times, inlets
 
 
-def simulation(r_i, lengths, waiting_times, adj_matrix, inlets, timesteps, patm = patm, eta = eta, gamma = gamma, cos = cos):
+def simulation(r_i, lengths, waiting_times, adj_matrix, inlets, timesteps, patm = patm, eta = eta, gamma = gamma, cos = cos, R0 = R0):
     size = adj_matrix.shape[0]
     
     # initialize arrays
@@ -83,6 +81,7 @@ def simulation(r_i, lengths, waiting_times, adj_matrix, inlets, timesteps, patm 
     heights = np.zeros(size)
     K = np.zeros(size)
     p = np.zeros(size)
+    q_i = np.zeros(size)
     
     filled = np.zeros(size, dtype=int)
     active = filled.copy()
@@ -121,19 +120,29 @@ def simulation(r_i, lengths, waiting_times, adj_matrix, inlets, timesteps, patm 
         old_heights = heights.copy()
         
         # select filled sub-network behind the waterfront
+        act_waiting = np.where(activation_time>time[t-1])
         mask[:] = 0
         mask[inlets] = 1
         mask[fills] = 1
         mask[acts] = 1
+        mask[act_waiting] = 0
         masked = np.where(mask>0)[0]
-        act_waiting = np.where(activation_time>time[t-1])
+        
+        #  check if there is any active pore
+        
+        if not np.any(mask[acts] > 0):
+            time[t] = time[t-1] + dt
+            V[t] = V[t-1]
+            dt = dt+dt
+            continue 
+        
                
         # define RHS (boundary conditions)
         p[:]= 0
         p[acts] = pc[acts] + patm
         p[act_waiting] = 0
-        p[inlets] = patm
-
+        p[inlets] = np.min([patm + np.abs(R0*q_i[inlets]), pc[inlets] + patm], axis = 0)
+        
         # define conductance (K_mat) and LHS (A) matrix
         K_mat = init_K(acts, fills, r_i, K_full, adj_matrix, K, heights)
         A = - K_mat.copy()
@@ -143,7 +152,7 @@ def simulation(r_i, lengths, waiting_times, adj_matrix, inlets, timesteps, patm 
         A[inlets,inlets] = 1
             
         for i in acts[0]:
-            if i in act_waiting[0]: continue
+            # if i in act_waiting[0]: continue
             A[i,:] = 0
             A[i,i] = 1  
         
@@ -164,6 +173,7 @@ def simulation(r_i, lengths, waiting_times, adj_matrix, inlets, timesteps, patm 
           
     #  update pore filling states
         heights = heights + dt*q_i/np.pi/r_i**2
+        # heights[act_waiting] = 0
                 
         old_filled = filled.copy()
         filled[heights>=lengths] = 1
@@ -188,5 +198,5 @@ def simulation(r_i, lengths, waiting_times, adj_matrix, inlets, timesteps, patm 
         
     return time, V, V0, activation_time, filling_time
 
-#adj_matrix, r_i, lengths, waiting_times, inlets = init_regular_grid(dim)  
-#time, V, V0, activation_time, filling_time = simulation(r_i, lengths, waiting_times, adj_matrix, inlets, timesteps)
+# adj_matrix, r_i, lengths, waiting_times, inlets = init_regular_grid(dim)  
+# time, V, V0, activation_time, filling_time = simulation(r_i, lengths, waiting_times, adj_matrix, inlets, timesteps)
