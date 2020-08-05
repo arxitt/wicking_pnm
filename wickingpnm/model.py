@@ -176,6 +176,9 @@ class PNM:
             throats = self.extract_throat_list(label_matrix, labels)
             self.graph = nx.Graph()
             self.graph.add_edges_from(np.uint16(throats[:,:2]))
+            Gcc = sorted(nx.connected_components(self.graph), key=len, reverse=True)
+            self.graph = self.graph.subgraph(Gcc[0])
+            # TODO: extract greatest connected component and update inlet label reference
 
     def generate_pore_data(self, pore_data = None):
         if pore_data is None:
@@ -195,17 +198,28 @@ class PNM:
 
         factor = 1
         px = pore_data.attrs['voxel'].data
-        radi = self.radi = px*np.sqrt(pore_data['value_properties'].sel(property = 'median_area').data/np.pi)*factor
-        heights = self.heights = px*pore_data['value_properties'].sel(property = 'major_axis').data*factor**2
+        
+        relevant_labels = list(self.label_dict.keys())
+        radi = self.radi = px*np.sqrt(pore_data['value_properties'].sel(property = 'median_area', label = relevant_labels).data/np.pi)*factor
+        heights = self.heights = px*pore_data['value_properties'].sel(property = 'major_axis', label = relevant_labels).data*factor**2
         size = self.labels.max() + 1
+        
 
         # Use random pores if there's no experimental data or if the graph is too big for the dataset
+        # NO!! Even if the graph is not too big, you need to asign the properties of the PROPERLY CORRESPONDING labels
+        # only use ECDF for artificial networks or if explicitly told so!
+        #  I thought, we had discussed this... Please ask if anything is not clear
         if self.data is None:
             # corr = exp_data['sig_fit_data'].sel(sig_fit_var = 'alpha [vx]')/pore_data['value_properties'].sel(property = 'volume', label = exp_data['label'])
             # pore_data['value_properties'].sel(property = 'median_area', label = exp_data['label']) = 1/corr*pore_data['value_properties'].sel(property = 'median_area', label = exp_data['label'])
             # pore_data['value_properties'].sel(property = 'major_axis', label = exp_data['label']) = corr
 
             print('Initializing pore props from ECDF distribution')
+
+#           you can use all pores even those outside the network (isolated nodes) as base for the statistical distributio here
+            radi = self.radi = px*np.sqrt(pore_data['value_properties'].sel(property = 'median_area').data/np.pi)*factor
+            heights = self.heights = px*pore_data['value_properties'].sel(property = 'major_axis').data*factor**2
+            size = self.labels.max() + 1
 
             # TODO: couple radii and heights because they correlate slightly, currently the pore resulting pore volumes are too small
             # or, mix distribution functions of height, radius and volume. Something to think about ... for later ...
@@ -226,8 +240,11 @@ class PNM:
             for i in range(size):
                 times[i] *= 10**np.random.randint(-1, 3)
         else:
-            print('Generating waiting times from ECDF distribution')
-            self.waiting_times = waitingtimes.from_ecdf(data, len(self.labels))
+            # print('Generating waiting times from ECDF distribution')
+            print('Generating waiting times from Gamma distribution')
+            # self.waiting_times = waitingtimes.from_ecdf(data, len(self.labels))
+            self.waiting_times = waitingtimes.from_gamma_fit(len(self.labels))
+            # TODO: get waiting times from gamma distribution again
 
     def build_inlets(self, amount = 5):
         inlets = np.array(self.inlets, dtype = np.int)
