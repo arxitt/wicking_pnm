@@ -79,6 +79,19 @@ def from_ecdf(diff_data, n):
     
     return waiting_times
 
+
+def from_sigmoid_ecdf(diff_data, n):
+    
+    diffs = diff_data['diffs_v1'][2,:].data
+    diffs = diffs[diffs>=0]
+    x_t, y_t = weighted_ecdf(diffs)
+    func = interp1d(y_t, x_t, fill_value = 'extrapolate')
+    waiting_times = func(np.random.rand(n))
+    
+    return waiting_times
+    
+
+
 def from_gamma_fit(n, p=[56.97385398, 0.77929465,  0.84938767,  6.999599]):
     """
     

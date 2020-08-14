@@ -3,9 +3,6 @@ import matplotlib.pyplot as plt
 
 from collections import deque
 
-import wickingpnm.old_school_DPNM_v5 as DPNM
-import networkx as nx
-
 class Material:
     def __init__(self,
             eta = 1,
@@ -87,94 +84,86 @@ class Simulation:
     # TODO: Move the initialization to __init__
     def run(self):
         pnm = self.pnm
-        # filled = pnm.filled
-        # R0 = pnm.R0
-        # act_time = self.act_time
-        # h = self.h
+        filled = pnm.filled
+        R0 = pnm.R0
+        act_time = self.act_time
+        h = self.h
         r = self.r
         h0 = self.h0
 
-        # # Generate_waiting_times will build new waiting times with the same
-        # # technique, this is needed so that multiple runs (in multiple
-        # # processes) on the same PNM don't produce the same results.
+        # Generate_waiting_times will build new waiting times with the same
+        # technique, this is needed so that multiple runs (in multiple
+        # processes) on the same PNM don't produce the same results.
         pnm.generate_waiting_times()
 
-
-        
-        r_i = r
-        lengths = h0
-        waiting_times = pnm.waiting_times
-        graph = pnm.graph
-        adj_matrix = nx.to_numpy_array(graph)
         inlets = pnm.inlets
-        timesteps = 10000000
-        
-        
-        time, V, V0, activation_time, filling_time = DPNM.simulation(r_i, lengths, waiting_times, adj_matrix, inlets, timesteps)
-        # # this is the simulation:
-        # active = deque(inlets)
-        # newly_active = deque()
-        # finished = deque()
+        R0[inlets] = pnm.R_inlet
+        pnm.R_full = self.material.poiseuille_resistance(h0, r) + R0
 
-        # # Create a dictionary for quicker lookup of whether the node is an inlet
-        # inlets_dict = {}
-        # for node in inlets:
-        #     inlets_dict[node] = True
+        # this is the simulation:
+        active = deque(inlets)
+        newly_active = deque()
+        finished = deque()
 
-        # # every time step solve explicitly
-        # R_inlet = pnm.R_inlet
-        # tmax = self.max_time
-        # dt = np.float64(self.time_step)
-        # t = dt
+        # Create a dictionary for quicker lookup of whether the node is an inlet
+        inlets_dict = {}
+        for node in inlets:
+            inlets_dict[node] = True
 
-        # step = 0
-        # time = np.zeros(np.int(np.ceil(tmax/dt)))
-        # V = pnm.V = np.zeros(len(time))
-        # t_w = pnm.waiting_times
-        # while t <= tmax:
-        #     # first check, which pores are currently getting filled (active)
-        #     if len(newly_active) != 0:
-        #         R0 = pnm.outlet_resistances()
+        # every time step solve explicitly
+        R_inlet = pnm.R_inlet
+        tmax = self.max_time
+        dt = np.float64(self.time_step)
+        t = dt
 
-        #     for node in newly_active:
-        #         act_time[node] = t + t_w[node]
-        #         if not filled[node] and node not in active:
-        #             if self.verbose:
-        #                 print('\nnew active node\n', node)
+        step = 0
+        time = np.zeros(np.int(np.ceil(tmax/dt)))
+        V = pnm.V = np.zeros(len(time))
+        t_w = pnm.waiting_times
+        while t <= tmax:
+            # first check, which pores are currently getting filled (active)
+            if len(newly_active) != 0:
+                R0 = pnm.outlet_resistances()
 
-        #             active.append(node)
-        #     newly_active.clear()
+            for node in newly_active:
+                act_time[node] = t + t_w[node]
+                if not filled[node] and node not in active:
+                    if self.verbose:
+                        print('\nnew active node\n', node)
 
-        #     # calculate the new filling state (h) for every active pore
-        #     for node in active:
-        #         if t > act_time[node]:
-        #             if node in inlets_dict:
-        #                 # patch to consider inlet resitance at inlet pores
-        #                 h[node] += dt*self.material.capillary_rise2(r[node], R0[node] + R_inlet, h[node])
-        #             else:
-        #                 # influence of inlet resistance on downstream pores considered by initialization of poiseuille resistances
-        #                 h[node] += dt*self.material.capillary_rise2(r[node], R0[node], h[node])
+                    active.append(node)
+            newly_active.clear()
 
-        #             # if pore is filled, look for neighbours that would now start to get filled
-        #             if h[node] >= h0[node]:
-        #                 h[node] = h0[node]
-        #                 filled[node] = True
-        #                 finished.append(node)
-        #                 newly_active += pnm.neighbour_labels(node)
+            # calculate the new filling state (h) for every active pore
+            for node in active:
+                if t > act_time[node]:
+                    if node in inlets_dict:
+                        # patch to consider inlet resitance at inlet pores
+                        h[node] += dt*self.material.capillary_rise2(r[node], R0[node] + R_inlet, h[node])
+                    else:
+                        # influence of inlet resistance on downstream pores considered by initialization of poiseuille resistances
+                        h[node] += dt*self.material.capillary_rise2(r[node], R0[node], h[node])
 
-        #     for node in finished:
-        #         if self.verbose:
-        #             print('\nnode finished\n', node)
+                    # if pore is filled, look for neighbours that would now start to get filled
+                    if h[node] >= h0[node]:
+                        h[node] = h0[node]
+                        filled[node] = True
+                        finished.append(node)
+                        newly_active += pnm.neighbour_labels(node)
 
-        #         active.remove(node)
-        #     finished.clear()
+            for node in finished:
+                if self.verbose:
+                    print('\nnode finished\n', node)
 
-        #     time[step] = t
-        #     # TODO: Stop when the filling slows down meaningfully
-        #     V[step] = self.material.total_volume(h[pnm.labels], r[pnm.labels])
-        #     step += 1
-        #     # TODO: Make time non-linear for fewer steps
-        #     t += dt
+                active.remove(node)
+            finished.clear()
+
+            time[step] = t
+            # TODO: Stop when the filling slows down meaningfully
+            V[step] = self.material.total_volume(h[pnm.labels], r[pnm.labels])
+            step += 1
+            # TODO: Make time non-linear for fewer steps
+            t += dt
 
         return np.array([time, V, self.pnm.waiting_times])
 

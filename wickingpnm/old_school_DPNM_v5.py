@@ -13,7 +13,7 @@ import networkx as nx
 
 eta = 1E-3 #Pas
 gamma = 72E-3 #N/m
-n = 3
+n = 6
 a = 2
 cos = np.cos(48/180*np.pi)
 R0 = 0
@@ -43,8 +43,8 @@ def timestep(q_i, r_i, h, l, dxmax = 0.5E-4):
 def init_K(acts, fills, r_i, K_full, adj_matrix, K, heights):
     # K = K_full.copy()
     K[:] = 0
-    K[fills] = K_full[fills].copy()/2
-    K[acts] = active_K(heights[acts]+1E-6, r_i[acts])/2
+    K[fills] = K_full[fills].copy()#/2
+    K[acts] = active_K(heights[acts]+1E-6, r_i[acts])#/2  #comparing to Washburn suggests to not divide by two, but 4 ?!
     
     K_mat = 1/(1/K + 1/K[:,None])
     
@@ -65,9 +65,9 @@ def init_regular_grid(dim):
     
     adj_matrix = nx.to_numpy_array(graph)
        
-    r_i = np.ones(size)*1E-5 + np.random.rand(size)*1E-5
-    lengths = np.ones(size)*1E-2 + np.random.rand(size)*1E-2
-    waiting_times = np.random.rand(size)*20+5
+    r_i = np.ones(size)*1.5E-5# + np.random.rand(size)*1E-5
+    lengths = np.ones(size)*1.5E-2# + np.random.rand(size)*1E-2
+    waiting_times = np.random.rand(size)*5+5
     inlets = np.arange(dim[0]*dim[1])
     
     return adj_matrix, r_i, lengths, waiting_times, inlets
@@ -199,5 +199,5 @@ def simulation(r_i, lengths, waiting_times, adj_matrix, inlets, timesteps, patm 
         
     return time, V, V0, activation_time, filling_time
 
-adj_matrix, r_i, lengths, waiting_times, inlets = init_regular_grid(dim)  
-time, V, V0, activation_time, filling_time = simulation(r_i, lengths, waiting_times, adj_matrix, inlets, timesteps)
+# adj_matrix, r_i, lengths, waiting_times, inlets = init_regular_grid(dim)  
+# time, V, V0, activation_time, filling_time = simulation(r_i, lengths, waiting_times, adj_matrix, inlets, timesteps)

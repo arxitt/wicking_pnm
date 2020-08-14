@@ -243,7 +243,8 @@ class PNM:
             # print('Generating waiting times from ECDF distribution')
             print('Generating waiting times from Gamma distribution')
             # self.waiting_times = waitingtimes.from_ecdf(data, len(self.labels))
-            self.waiting_times = waitingtimes.from_gamma_fit(len(self.labels))
+            self.waiting_times = waitingtimes.from_sigmoid_ecdf(data, len(self.labels))
+            # self.waiting_times = waitingtimes.from_gamma_fit(len(self.labels))
             # TODO: get waiting times from gamma distribution again
 
     def build_inlets(self, amount = 5):
