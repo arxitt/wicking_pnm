@@ -1,8 +1,16 @@
+import sys
+
+homeCodePath=r"H:\10_Python\005_Scripts_from_others\Laurent\wicking_pnm"
+if homeCodePath not in sys.path:
+	sys.path.append(homeCodePath)
+
+
 import random
 import xarray as xr
 import numpy as np
 import scipy as sp
 import networkx as nx
+import time
 
 from collections import deque
 from skimage.morphology import cube
@@ -13,7 +21,12 @@ from os import path
 
 import wickingpnm.waitingtimes as waitingtimes
 
-def label_function(struct, pore_object, label, verbose = False):
+time_limit = {'T3_100_10_III': 344,
+              'T3_300_5': 229,
+              'T3_100_7': 206,
+              'T3_100_10': 232}
+
+def label_function(struct, pore_object, label, labels, verbose = False):
     mask = pore_object == label
     connections = deque()
 
@@ -25,12 +38,13 @@ def label_function(struct, pore_object, label, verbose = False):
 
     for nb in neighbors:
         if nb != label:
-            conn = (label, nb)
-
-            if verbose:
-                print('\t{} connects to {}'.format(conn[1], conn[0]))
-
-            connections.append(conn)
+            if nb in labels:
+                conn = (label, nb)
+    
+                if verbose:
+                    print('\t{} connects to {}'.format(conn[1], conn[0]))
+    
+                connections.append(conn)
 
     return connections
 
@@ -46,13 +60,16 @@ class PNM:
         rand_exp_data = False,
         rand_pore_props = False,
         rand_waiting_times = False,
-        verbose = False
+        verbose = False,
+        seed = int(time.time())
     ):
         self.job_count = job_count
         self.verbose = verbose
 
         self.data_path = data_path # Head directory for the data
         self.sample = sample # Sample name
+        
+        self.seed = seed
 
         dyn_data_dir, pore_props_dir, pore_diff_dir = \
             'dyn_data', 'pore_props', 'pore_diffs'
@@ -63,7 +80,10 @@ class PNM:
         # self.pore_diff_path = path.join(data_path, pore_diff_dir, 'peak_diff_data_' + sample + '.nc')
         self.exp_data_path = path.join(data_path, 'dyn_data_' + sample + '.nc')
         self.pore_props_path = path.join(data_path,  'pore_props_' + sample + '.nc')
-        self.pore_diff_path = path.join(data_path, 'peak_diff_data_' + sample + '.nc')
+        # self.pore_diff_path = path.join(data_path, 'peak_diff_data_' + sample + '.nc')
+        drive = r'\\152.88.86.87\data118'
+        diff_data_path = path.join(drive, 'Robert_TOMCAT_3_netcdf4_archives', 'processed_1200_dry_seg_aniso_sep')
+        self.pore_diff_path = path.join(diff_data_path, 'peak_diff_data_' + sample + '.nc')
 
         self.randomize_waiting_times = rand_waiting_times
         self.pore_diff_data = None
@@ -134,7 +154,7 @@ class PNM:
 
         im = label_matrix
 
-        struct = cube # FIXME: ball does not work as you would think (anisotropic expansion)
+        struct = cube # ball does not work as you would think (anisotropic expansion)
         if im.ndim == 2:
             struct = disk
 
@@ -151,7 +171,7 @@ class PNM:
 
         connections_raw = Parallel(n_jobs = self.job_count)(
             delayed(label_function)\
-                (struct, im[bounding_box], label, self.verbose) \
+                (struct, im[bounding_box], label, labels, self.verbose) \
                 for (bounding_box, label) in zip(bounding_boxes, labels)
         )
 
@@ -166,6 +186,13 @@ class PNM:
     def generate_graph(self, exp_data):
         label_matrix = exp_data['label_matrix'].data
         labels = exp_data['label'].data
+        
+        
+        # clean up label matrix for late spurious pixels (at fiber surfacedue to not correctable image shift )
+        # raw_labels = np.unique(label_matrix)
+        # for label in raw_labels[1:]:
+        #     if not label in labels:
+        #         label_matrix[np.where(label_matrix==label)] = 0
 
         if self.verbose:
             print('labels', labels)
@@ -178,7 +205,7 @@ class PNM:
             self.graph.add_edges_from(np.uint16(throats[:,:2]))
             Gcc = sorted(nx.connected_components(self.graph), key=len, reverse=True)
             self.graph = self.graph.subgraph(Gcc[0])
-            # TODO: extract greatest connected component and update inlet label reference
+
 
     def generate_pore_data(self, pore_data = None):
         if pore_data is None:
@@ -196,19 +223,22 @@ class PNM:
 
         print('Using experimental pore data')
 
-        factor = 1
-        px = pore_data.attrs['voxel'].data
+        
+        px = pore_data.attrs['voxel']
+        vx = px**3
+        tmax = -1
+        if self.sample in list(time_limit.keys()):
+            tmax = time_limit[self.sample]
         
         relevant_labels = list(self.label_dict.keys())
-        radi = self.radi = px*np.sqrt(pore_data['value_properties'].sel(property = 'median_area', label = relevant_labels).data/np.pi)*factor
-        heights = self.heights = px*pore_data['value_properties'].sel(property = 'major_axis', label = relevant_labels).data*factor**2
+        radi = self.radi = px*np.sqrt(pore_data['value_properties'].sel(property = 'median_area', label = relevant_labels).data/np.pi)
+        heights = self.heights = px*pore_data['value_properties'].sel(property = 'major_axis', label = relevant_labels).data
+        # volumes = self.volumes = vx*pore_data['value_properties'].sel(property = 'volume', label = relevant_labels).data
+        volumes =  vx*self.data['volume'][:,tmax-10:tmax-1].sel(label = relevant_labels).median(dim='time').data
+        volumes[volumes==0] = np.median(volumes[volumes>0])
+        self.volumes = volumes
         size = self.labels.max() + 1
         
-
-        # Use random pores if there's no experimental data or if the graph is too big for the dataset
-        # NO!! Even if the graph is not too big, you need to asign the properties of the PROPERLY CORRESPONDING labels
-        # only use ECDF for artificial networks or if explicitly told so!
-        #  I thought, we had discussed this... Please ask if anything is not clear
         if self.data is None:
             # corr = exp_data['sig_fit_data'].sel(sig_fit_var = 'alpha [vx]')/pore_data['value_properties'].sel(property = 'volume', label = exp_data['label'])
             # pore_data['value_properties'].sel(property = 'median_area', label = exp_data['label']) = 1/corr*pore_data['value_properties'].sel(property = 'median_area', label = exp_data['label'])
@@ -217,8 +247,8 @@ class PNM:
             print('Initializing pore props from ECDF distribution')
 
 #           you can use all pores even those outside the network (isolated nodes) as base for the statistical distributio here
-            radi = self.radi = px*np.sqrt(pore_data['value_properties'].sel(property = 'median_area').data/np.pi)*factor
-            heights = self.heights = px*pore_data['value_properties'].sel(property = 'major_axis').data*factor**2
+            radi = self.radi = px*np.sqrt(pore_data['value_properties'].sel(property = 'median_area').data/np.pi)
+            heights = self.heights = px*pore_data['value_properties'].sel(property = 'major_axis').data
             size = self.labels.max() + 1
 
             # TODO: couple radii and heights because they correlate slightly, currently the pore resulting pore volumes are too small
@@ -227,8 +257,8 @@ class PNM:
             random_input = lambda size: np.random.rand(size)
             factored_input = lambda size, factor: factor*np.ones(size) # factored_input(size, 0.7)
 
-            self.radi = interp1d(ecdf_radi.y[1:], ecdf_radi.x[1:], fill_value = 'extrapolate')(random_input(size))/factor
-            self.heights = interp1d(ecdf_heights.y[1:], ecdf_heights.x[1:], fill_value = 'extrapolate')(random_input(size))*factor**2
+            self.radi = interp1d(ecdf_radi.y[1:], ecdf_radi.x[1:], fill_value = 'extrapolate')(random_input(size))
+            self.heights = interp1d(ecdf_heights.y[1:], ecdf_heights.x[1:], fill_value = 'extrapolate')(random_input(size))
 
     def generate_waiting_times(self):
         size = self.labels.max() + 1
@@ -240,10 +270,10 @@ class PNM:
             for i in range(size):
                 times[i] *= 10**np.random.randint(-1, 3)
         else:
-            # print('Generating waiting times from ECDF distribution')
-            print('Generating waiting times from Gamma distribution')
-            # self.waiting_times = waitingtimes.from_ecdf(data, len(self.labels))
-            self.waiting_times = waitingtimes.from_sigmoid_ecdf(data, len(self.labels))
+            print('Generating waiting times from ECDF distribution')
+            # print('Generating waiting times from Gamma distribution')
+            self.waiting_times = waitingtimes.from_ecdf(data, len(self.labels))
+            # self.waiting_times = waitingtimes.from_sigmoid_ecdf(data, len(self.labels))
             # self.waiting_times = waitingtimes.from_gamma_fit(len(self.labels))
             # TODO: get waiting times from gamma distribution again
 
@@ -260,10 +290,11 @@ class PNM:
                     temp_inlets.append(inlet)
             self.inlets = np.array(temp_inlets)
 
-    # TODO: Change this to start with one random inlet and some amount of distant neighbours
+    # maybe TODO: Change this to start with one random inlet and some amount of distant neighbours
     def generate_inlets(self, amount):
         print('Generating {} inlets'.format(amount))
-        self.inlets = random.sample(list(self.labels), amount)
+        prng = np.random.RandomState(self.seed)
+        self.inlets = prng.choice(list(self.labels), size=amount, replace=False)
 
     def neighbour_labels(self, node):
         neighbour_nodes = self.graph.neighbors(self.nodes[node])

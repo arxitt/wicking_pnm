@@ -7,9 +7,7 @@ Created on Fri Jul 24 09:50:08 2020
 
 import numpy as np
 import networkx as nx
-
 # parameters
-
 
 eta = 1E-3 #Pas
 gamma = 72E-3 #N/m
@@ -38,6 +36,7 @@ def timestep(q_i, r_i, h, l, dxmax = 0.5E-4):
         if dxmax < rmin:
             dxmax = rmin
     dt = (dxmax*np.pi*r_i[q_i>0]**2/(q_i[q_i>0])).min()
+    dt = max((dt,0.005))
     return dt
      
 def init_K(acts, fills, r_i, K_full, adj_matrix, K, heights):
@@ -73,7 +72,8 @@ def init_regular_grid(dim):
     return adj_matrix, r_i, lengths, waiting_times, inlets
 
 
-def simulation(r_i, lengths, waiting_times, adj_matrix, inlets, timesteps, patm = patm, eta = eta, gamma = gamma, cos = cos, R0 = R0):
+def simulation(r_i, lengths, waiting_times, adj_matrix, inlets,  timesteps, sig_diffs = None, node_dict = None, patm = patm, eta = eta, gamma = gamma, cos = cos, R0 = R0, pnm=None, sample=None):
+    
     size = adj_matrix.shape[0]
     
     # initialize arrays
@@ -94,10 +94,10 @@ def simulation(r_i, lengths, waiting_times, adj_matrix, inlets, timesteps, patm 
 
     # get static pore properties
     K_full = np.pi*r_i**4/8/eta/lengths
+    K_full[inlets] = 1/R0
     pc = 2*gamma*cos/r_i 
     
     
-    # initialize network state
     filled[inlets] = 1
     fills = np.where(filled)
     active[np.unique(np.where(adj_matrix[fills,:]))]=1
@@ -109,6 +109,8 @@ def simulation(r_i, lengths, waiting_times, adj_matrix, inlets, timesteps, patm 
     
     # run simulation
     for t in range(timesteps):
+        # flag = False
+        # if t % 5000 == 0: flag=True
         
         # let loop roll off if full saturation is reached
         if V[t-1] >= V0: 
@@ -116,8 +118,7 @@ def simulation(r_i, lengths, waiting_times, adj_matrix, inlets, timesteps, patm 
             V[t] = V[t-1]
             continue
         
-        # TODO: add condition if all active pores are waiting and increment time step if so
-        
+       
         old_heights = heights.copy()
         
         # select filled sub-network behind the waterfront
@@ -142,7 +143,8 @@ def simulation(r_i, lengths, waiting_times, adj_matrix, inlets, timesteps, patm 
         p[:]= 0
         p[acts] = pc[acts] + patm
         p[act_waiting] = 0
-        p[inlets] = np.min([patm + np.abs(R0*q_i[inlets]), pc[inlets] + patm], axis = 0)
+        p[inlets] = patm 
+        
         
         # define conductance (K_mat) and LHS (A) matrix
         K_mat = init_K(acts, fills, r_i, K_full, adj_matrix, K, heights)
@@ -158,6 +160,7 @@ def simulation(r_i, lengths, waiting_times, adj_matrix, inlets, timesteps, patm 
             A[i,:] = 0
             A[i,i] = 1  
         
+        # reduce adjacency matrix to active subnet
         A = A[masked,:]
         A = A[:,masked] 
   
@@ -172,12 +175,15 @@ def simulation(r_i, lengths, waiting_times, adj_matrix, inlets, timesteps, patm 
        # get new time stepping
         if np.any(q_i>0):
             dt = 1.0001*timestep(q_i, r_i, old_heights[acts], lengths[acts])
-          
+
+        
     #  update pore filling states
         heights = heights + dt*q_i/np.pi/r_i**2
-                
         old_filled = filled.copy()
         filled[heights>=lengths] = 1
+        
+        #  allow draining of pores
+        # filled[heights<lengths]  = 0
         fills = np.where(filled)
         
         heights[heights<0] = 0
@@ -185,11 +191,51 @@ def simulation(r_i, lengths, waiting_times, adj_matrix, inlets, timesteps, patm 
         
         active[:] = 0
         active[np.unique(np.where(adj_matrix[fills,:]))] = 1
-        active[fills]=0
+        active[fills] = 0
         
         new_actives = np.where((active>0)*~(activation_time>0))
-        activation_time[new_actives] = waiting_times[new_actives] + time[t-1]
         
+        activation_time[new_actives] = waiting_times[new_actives] + time[t-1]
+        if pnm is not None:
+            for n in new_actives[0]:
+                if pnm.nodes[n] in pnm.data['label']:
+                    texp = pnm.data['sig_fit_data'].sel(sig_fit_var = 't0 [s]', label= pnm.nodes[n])
+                    activation_time[n] = texp
+
+
+                if sample == 'T3_025_3_III':
+    #                   late fills
+                    if pnm.nodes[n] == 25:
+                          activation_time[n] = time[t-1] + waiting_times[n]
+                    if pnm.nodes[n] == 31:
+                          activation_time[n] = time[t-1] + waiting_times[n]
+                    if pnm.nodes[n] == 149:
+                        activation_time[n] = time[t-1] + waiting_times[n]
+                    if pnm.nodes[n] == 69:
+                        activation_time[n] = time[t-1] + waiting_times[n]
+                    if pnm.nodes[n] == 24:
+                        activation_time[n] = time[t-1] + waiting_times[n]
+                        # [162,171,207]
+                        # inlets
+                    if pnm.nodes[n] == 162:
+                        activation_time[n] = 200
+                    if pnm.nodes[n] == 207:
+                        activation_time[n] = 200   
+                    if pnm.nodes[n] == 171:
+                        activation_time[n] = 200    
+                        
+                if sample == 'T3_100_7_III':
+                    # inlets [86, 89, 90]
+                    if pnm.nodes[n] == 86:
+                        activation_time[n] = 31
+                    if pnm.nodes[n] == 89:
+                        activation_time[n] = 20
+                    if pnm.nodes[n] == 90:
+                        activation_time[n] = 20                
+                    if pnm.nodes[n] == 52:
+                        activation_time[n] = 150                      
+            
+                    
         acts = np.where(active>0)
         
         # wrap up results
