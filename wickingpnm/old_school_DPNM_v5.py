@@ -7,14 +7,16 @@ Created on Fri Jul 24 09:50:08 2020
 
 import numpy as np
 import networkx as nx
+import time as systime
 # parameters
+
 
 eta = 1E-3 #Pas
 gamma = 72E-3 #N/m
 n = 6
 a = 2
 cos = np.cos(48/180*np.pi)
-R0 = 0
+R0 = 1
 
 timesteps = 100000
 patm = 101.325E3 #Pa
@@ -105,13 +107,12 @@ def simulation(r_i, lengths, waiting_times, adj_matrix, inlets,  timesteps, sig_
     heights[fills] = lengths[fills]
     acts = np.where(active)
     V0 = (lengths*np.pi*r_i**2).sum()
-    dt=0
+    dt=0.005
     
     # run simulation
     for t in range(timesteps):
         # flag = False
         # if t % 5000 == 0: flag=True
-        
         # let loop roll off if full saturation is reached
         if V[t-1] >= V0: 
             time[t] = time[t-1] + dt
@@ -143,7 +144,7 @@ def simulation(r_i, lengths, waiting_times, adj_matrix, inlets,  timesteps, sig_
         p[:]= 0
         p[acts] = pc[acts] + patm
         p[act_waiting] = 0
-        p[inlets] = patm 
+        p[inlets] = patm #np.min([patm + np.abs(R0*q_i[inlets]), pc[inlets] + patm], axis = 0)
         
         
         # define conductance (K_mat) and LHS (A) matrix
@@ -160,7 +161,6 @@ def simulation(r_i, lengths, waiting_times, adj_matrix, inlets,  timesteps, sig_
             A[i,:] = 0
             A[i,i] = 1  
         
-        # reduce adjacency matrix to active subnet
         A = A[masked,:]
         A = A[:,masked] 
   
@@ -179,6 +179,7 @@ def simulation(r_i, lengths, waiting_times, adj_matrix, inlets,  timesteps, sig_
         
     #  update pore filling states
         heights = heights + dt*q_i/np.pi/r_i**2
+        # heights[acts] = heights[acts] + dt*q_i[acts]/np.pi/r_i[acts]**2
         old_filled = filled.copy()
         filled[heights>=lengths] = 1
         
@@ -244,6 +245,10 @@ def simulation(r_i, lengths, waiting_times, adj_matrix, inlets,  timesteps, sig_
         V[t] = (heights*np.pi*r_i**2).sum()
         
     return time, V, V0, activation_time, filling_time
+
+#  multiply waiting time with distribution of peaks in pore, 
+# better idea: add probable number of waiting intervals (less prone to outlieres)
+# do this! it's a safe bet
 
 # adj_matrix, r_i, lengths, waiting_times, inlets = init_regular_grid(dim)  
 # time, V, V0, activation_time, filling_time = simulation(r_i, lengths, waiting_times, adj_matrix, inlets, timesteps)

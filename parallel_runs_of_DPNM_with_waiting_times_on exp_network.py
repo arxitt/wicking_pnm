@@ -24,7 +24,7 @@ from wickingpnm.old_school_DPNM_v5 import simulation
 import xarray as xr
 import os
 import robpylib
-virtual_inlets = True
+
 temp_folder = r"Z:\users\firo\joblib_tmp"
 
 # TODO: build random sample choice
@@ -115,7 +115,7 @@ def from_ecdf(diff_data, n, seed=1):
 
     intra_diffs = diff_data['diffs_v4'][2:,:].data
     intra_weights = np.ones(intra_diffs.shape) * diff_data['diffs_v4'][1,:].data
-    intra_weights = 1- intra_weights
+    intra_weights = 1 - intra_weights
     
     diffs = np.concatenate([inter_diffs.flatten(), intra_diffs.flatten()], axis=0)
     weights = np.concatenate([inter_weights.flatten(), intra_weights.flatten()])
@@ -174,6 +174,8 @@ def generate_combined_waiting_times(diff_data, size,peak_fun, i):
     prng = np.random.RandomState(i)
     peak_num = peak_fun(prng.rand(size))
     
+    # peak_num[:] = 1
+    
     diffs = diff_data[0]
     weights = diff_data[1]
     mask = diffs>0
@@ -192,7 +194,7 @@ def generate_combined_waiting_times(diff_data, size,peak_fun, i):
             waiting_times[i] = waiting_times[i] + func(prng3.rand())
     return waiting_times
 
-def core_simulation(r_i, lengths, adj_matrix, inlets, timesteps,  pnm_params, peak_fun, i, pnm, diff_data, R0=0):
+def core_simulation(r_i, lengths, adj_matrix, inlets, timesteps,  pnm_params, peak_fun, i, pnm, diff_data, R0=1):
     size = len(r_i)
 
     if len(diff_data)==2:
@@ -230,28 +232,28 @@ def core_function(samples, timesteps, i, peak_fun=peak_fun, inlet_count = 2, dif
 
     pnm = PNM(**pnm_params)
     graph = pnm.graph.copy()
-    R0 = 1E17#4E15
+    R0 = 1#E17#4E15
     
     
     # ####fixed inlets for validation samples##############
-   #  inlet_nodes = [162,171,207]
-   #  if pnm.sample == 'T3_100_7_III': inlet_nodes = [86, 89, 90, 52]
-   #  if pnm.sample == 'T3_300_8_III': inlet_nodes = [   13,    63,   149]
-   #  inlets = []
-   #  found_inlets = []
-   #  for inlet in inlet_nodes:
-   #      inlet = int(inlet)
-   #      if inlet in pnm.label_dict:
-   #          inlets.append(pnm.label_dict[inlet])
-   #          found_inlets.append(inlet)
-   #      else:
-   #          print('Failed to find node named', inlet)
+    # inlet_nodes = [162,171,207]
+    # if pnm.sample == 'T3_100_7_III': inlet_nodes = [86, 89, 90, 52]
+    # if pnm.sample == 'T3_300_8_III': inlet_nodes = [   13,    63,   149]
+    # inlets = []
+    # found_inlets = []
+    # for inlet in inlet_nodes:
+    #     inlet = int(inlet)
+    #     if inlet in pnm.label_dict:
+    #         inlets.append(pnm.label_dict[inlet])
+    #         found_inlets.append(inlet)
+    #     else:
+    #         print('Failed to find node named', inlet)
 
-   #  print('Got inlet labels:', inlets)
-    
-   #  pnm.inlets = inlets
-   #  pnm.build_inlets()
-   # ############# 
+    # print('Got inlet labels:', inlets)
+   
+    # pnm.inlets = inlets
+    # pnm.build_inlets()
+    ############# 
     
     if diff_data is None:    
         diff_data = pnm.pore_diff_data
@@ -261,12 +263,12 @@ def core_function(samples, timesteps, i, peak_fun=peak_fun, inlet_count = 2, dif
     found_inlets = []
     for inlet in inlets:
         found_inlets.append(pnm.nodes[inlet])
-    
-    if virtual_inlets:
-        v_inlets = -1*(np.arange(len(inlets))+1)
-        for i in range(len(inlets)):
-            graph.add_edge(found_inlets[i], v_inlets[i])
-        inlets = v_inlets
+
+
+    v_inlets = -1*(np.arange(len(inlets))+1)
+    for k in range(len(inlets)):
+        graph.add_edge(found_inlets[k], v_inlets[k])
+    inlets = v_inlets
             
     inlet_radii = np.zeros(len(inlets))
     inlet_heights = np.zeros(len(inlets))
@@ -274,9 +276,10 @@ def core_function(samples, timesteps, i, peak_fun=peak_fun, inlet_count = 2, dif
     r_i = pnm.radi.copy()
     lengths = pnm.volumes.copy()/np.pi/r_i**2
     
-    if virtual_inlets:
-        r_i = np.concatenate([r_i, inlet_radii])
-        lengths = np.concatenate([lengths, inlet_heights])
+    
+    r_i = np.concatenate([r_i, inlet_radii])
+    lengths = np.concatenate([lengths, inlet_heights])
+    
     adj_matrix = nx.to_numpy_array(graph)
     result_sim = core_simulation(r_i, lengths, adj_matrix, inlets, timesteps,  pnm_params, peak_fun, i, pnm, diff_data, R0=R0)
     
@@ -285,6 +288,7 @@ def core_function(samples, timesteps, i, peak_fun=peak_fun, inlet_count = 2, dif
 print('Warning: diff data path is hard-coded!')
 # print('Warning: Inlets and inlet resistance hard-coded')
 print('Warning: Inlet resistance hard-coded')
+# print('Warning peak number hard-coded to 1')
 njobs = 32
 timesteps = 1000000#0#0#0
 
@@ -306,12 +310,17 @@ paper_samples = [
     'T3_300_8_III',
     'T3_300_9_III'
 ]
-# not_extreme_samples = ['T3_100_7_III', 'T3_300_5', 'T3_100_1',  'T3_300_5_III', 'T3_100_6', 'T3_300_8_III', 'T3_025_3_III']
+
 not_extreme_samples = paper_samples
-# not_extreme_samples.remove('T3_300_8_III')
-not_extreme_samples.remove('T3_025_7_II')
-not_extreme_samples.remove('T3_100_1')
-results = Parallel(n_jobs=njobs, temp_folder=temp_folder)(delayed(core_function)(not_extreme_samples, timesteps, i) for i in range(128))  
+not_extreme_samples.remove('T3_100_1') #processing artefacts from moving sample
+# not_extreme_samples.remove('T3_025_4') #very little uptake
+# not_extreme_samples.remove('T3_025_9_III') #very little uptake
+# not_extreme_samples.remove('T3_300_4') #very little uptake
+# not_extreme_samples.remove('T3_100_7') #very little uptake
+
+
+temp_folder = None
+results = Parallel(n_jobs=njobs, temp_folder=temp_folder)(delayed(core_function)(not_extreme_samples, timesteps, i+5) for i in range(512))  
 # results = Parallel(n_jobs=njobs)(delayed(core_function)(not_extreme_samples, timesteps, i, diff_data=[comb_diff_data, comb_weight_data]) for i in range(16))  
  
 
@@ -323,4 +332,4 @@ for i in range(len(results)):
     results_np[i,:] = results[i][1]
     # act_times[i,:]= results[i][3]
     # finish_times[i,:]= results[i][4]
-np.save(r"H:\11_Essential_Data\06_PNM\PNM_results_random_samples_R_1E17_2_inlet_no_extreme_samples", results_np)
+np.save(r"H:\11_Essential_Data\06_PNM\PNM_results_random_samples_R_1", results_np)
