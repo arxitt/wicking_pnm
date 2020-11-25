@@ -319,7 +319,7 @@ not_extreme_samples.remove('T3_100_1') #processing artefacts from moving sample
 # not_extreme_samples.remove('T3_100_7') #very little uptake
 
 
-temp_folder = None
+# temp_folder = None
 results = Parallel(n_jobs=njobs, temp_folder=temp_folder)(delayed(core_function)(not_extreme_samples, timesteps, i+5) for i in range(512))  
 # results = Parallel(n_jobs=njobs)(delayed(core_function)(not_extreme_samples, timesteps, i, diff_data=[comb_diff_data, comb_weight_data]) for i in range(16))  
  
