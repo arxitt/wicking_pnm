@@ -239,9 +239,9 @@ not_extreme_samples.remove('T3_025_9_III') #very little uptake --> v2,v3
 # not_extreme_samples.remove('T3_100_7') #very little uptake
 temp_folder = None
 temp_folder = r"Z:\users\firo\joblib_tmp"
-results = Parallel(n_jobs=njobs, temp_folder=temp_folder)(delayed(core_function)(not_extreme_samples, timesteps, i+5) for i in range(128))  
-
-dumpfilename = r"R:\Scratch\305\_Robert\simulation_dump\results_random2.p"
-dumpfile = open(dumpfilename, 'wb')
-pickle.dump(results, dumpfile)
-dumpfile.close()
+# results = Parallel(n_jobs=njobs, temp_folder=temp_folder)(delayed(core_function)(not_extreme_samples, timesteps, i+5) for i in range(128))  
+result = core_function(not_extreme_samples, timesteps, 5)
+# dumpfilename = r"R:\Scratch\305\_Robert\simulation_dump\results_random2.p"
+# dumpfile = open(dumpfilename, 'wb')
+# pickle.dump(results, dumpfile)
+# dumpfile.close()
