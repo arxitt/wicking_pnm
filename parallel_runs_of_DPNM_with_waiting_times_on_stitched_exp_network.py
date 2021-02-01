@@ -216,7 +216,8 @@ def get_network_parameter(i, samples, inlet_count, return_pnm=False):
     pnm = PNM(**pnm_params)
     graph = pnm.graph.copy()
     r_i = pnm.radi.copy()
-    lengths = pnm.volumes.copy()/np.pi/r_i**2
+    volumes = pnm.volumes.copy()
+    lengths = volumes/np.pi/r_i**2
     sourcesraw = np.unique(pnm.data['label_matrix'][:,:,0])[1:]
     targetsraw = np.unique(pnm.data['label_matrix'][:,:,-1])[1:]
     sources = []
@@ -231,9 +232,9 @@ def get_network_parameter(i, samples, inlet_count, return_pnm=False):
     tops = targets
 
     if return_pnm:
-        return r_i, lengths, graph, bottoms, tops, pnm, pnm_params
+        return r_i, lengths, volumes, graph, bottoms, tops, pnm, pnm_params
     else:
-        return r_i, lengths, graph, bottoms, tops
+        return r_i, lengths, volumes, graph, bottoms, tops
 
 def stitch_graphs(graph1, graph2, top_nodes1, bottom_nodes2, level):
     nodes2 = np.array(graph2.nodes())+level*1000
@@ -271,14 +272,15 @@ def core_simulation(r_i, lengths, adj_matrix, inlets, timesteps,  pnm_params, pe
 
 
 def core_function(samples, timesteps, i, peak_fun=peak_fun, inlet_count = 2, diff_data=None, levels=1):
-    r_i, lengths, graph, bottoms_level1, tops_level1, pnm, pnm_params = get_network_parameter(i, samples, inlet_count, return_pnm =  True)
+    r_i, lengths, volumes, graph, bottoms_level1, tops_level1, pnm, pnm_params = get_network_parameter(i, samples, inlet_count, return_pnm =  True)
     
     sources2 = bottoms_level1
     
     for level in range(1, levels):
-        r2, l2, graph2, bottoms2, tops2 = get_network_parameter(int(i*2+level/2+13), samples, inlet_count)
+        r2, l2,v2, graph2, bottoms2, tops2 = get_network_parameter(int(i*2+level/2+13), samples, inlet_count)
         r_i = np.concatenate([r_i, r2])
         lengths = np.concatenate([lengths, l2])
+        volumes = np.concatenate([volumes, v2])
         graph = stitch_graphs(graph, graph2, tops_level1, bottoms2, level)
         tops_level1 = tops2
    
