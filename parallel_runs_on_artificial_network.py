@@ -1,0 +1,178 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Mon Feb  1 10:22:00 2021
+
+@author: firo
+"""
+
+
+import sys
+
+homeCodePath=r"H:\10_Python\005_Scripts_from_others\Laurent\wicking_pnm"
+if homeCodePath not in sys.path:
+	sys.path.append(homeCodePath)
+    
+    
+import scipy as sp
+import numpy as np
+from scipy.interpolate import interp1d
+from joblib import Parallel, delayed
+import networkx as nx
+from wickingpnm.model import PNM
+from wickingpnm.old_school_DPNM_v5 import simulation
+import xarray as xr
+import os
+import robpylib
+
+
+
+ecdf = robpylib.CommonFunctions.Tools.weighted_ecdf
+
+
+sourceFolder = r"Z:\Robert_TOMCAT_3_netcdf4_archives\processed_1200_dry_seg_aniso_sep"
+
+#  extract distribution of peaks per pore
+peak_num = np.array([])
+comb_diff_data = np.array([])
+comb_weight_data = np.array([])
+samples = []
+for sample in os.listdir(sourceFolder):
+    if sample[:3] == 'dyn':
+        data = xr.load_dataset(os.path.join(sourceFolder, sample))
+        num_sample = data['dynamics'].sel(parameter = 'num filling peaks').data
+        peak_num = np.concatenate([peak_num, num_sample])
+        samples.append(data.attrs['name'])
+    if sample[:14] == 'peak_diff_data':
+        diff_data = xr.load_dataset(os.path.join(sourceFolder, sample))
+        inter_diffs = diff_data['diffs_v2'][2:,:].data
+        inter_weights = np.ones(inter_diffs.shape)
+    
+        intra_diffs = diff_data['diffs_v4'][2:,:].data
+        intra_weights = np.ones(intra_diffs.shape) * diff_data['diffs_v4'][1,:].data
+        intra_weights = 1- intra_weights
+        
+        diffs = np.concatenate([inter_diffs.flatten(), intra_diffs.flatten()], axis=0)
+        weights = np.concatenate([inter_weights.flatten(), intra_weights.flatten()])
+        
+        comb_diff_data = np.concatenate([comb_diff_data, diffs], axis=0)
+        comb_weight_data = np.concatenate([comb_weight_data, diffs], axis=0)
+        
+        
+peak_num = peak_num[peak_num>1]
+
+x, y = ecdf(peak_num)
+
+peak_fun = interp1d(y, x, fill_value = 'extrapolate')
+
+
+def generalized_gamma_cdf(x, xm, d, b, x0):
+    y = sp.special.gammainc(d/b, ((x-x0)/xm)**b)/sp.special.gamma(d/b)
+    return y
+
+def weighted_ecdf(data, weight = False):
+    """
+    input: 1D arrays of data and corresponding weights
+    sets weight to 1 if no weights given (= "normal" ecdf, but better than the statsmodels version)
+    """
+    if not np.any(weight):
+        weight = np.ones(len(data))
+    
+    sorting = np.argsort(data)
+    x = data[sorting]
+    weight = weight[sorting]
+    y = np.cumsum(weight)/weight.sum()
+     
+    # clean duplicates, statsmodels does not do this, but it is necessary for us
+    
+    x_clean = np.unique(x)
+    y_clean = np.zeros(x_clean.shape)
+    
+    for i in range(len(x_clean)):
+        y_clean[i] = y[x==x_clean[i]].max()
+    return x_clean, y_clean
+
+def from_ecdf(diff_data, n, seed=1):
+    """
+    
+    Parameters
+    ----------
+    diff_data : netcdf4
+        dataset containing waiting times as peak differences.
+    n : int
+        number of nodes.
+
+    Returns
+    -------
+    array of waiting times with lentgh n.
+
+    """
+    inter_diffs = diff_data['diffs_v2'][2:,:].data
+    inter_weights = np.ones(inter_diffs.shape)
+
+    intra_diffs = diff_data['diffs_v4'][2:,:].data
+    intra_weights = np.ones(intra_diffs.shape) * diff_data['diffs_v4'][1,:].data
+    intra_weights = 1 - intra_weights
+    
+    diffs = np.concatenate([inter_diffs.flatten(), intra_diffs.flatten()], axis=0)
+    weights = np.concatenate([inter_weights.flatten(), intra_weights.flatten()])
+
+    mask = diffs>0
+
+    x_t, y_t = weighted_ecdf(diffs[mask].flatten(), weights[mask].flatten())
+    
+    func = interp1d(y_t, x_t, fill_value = 'extrapolate')
+    prng2 = np.random.RandomState(seed)
+    waiting_times = func(prng2.rand(n))
+    
+    return waiting_times
+
+
+
+def extend_waiting_time(waiting_times, waiting_time_gen, peak_num, diff_data, seed):
+    size = len(waiting_times)
+    for i in range(size):
+        j = 1
+        while j < peak_num[i]:
+            j = j + 1
+            waiting_times[i] = waiting_times[i] + waiting_time_gen(diff_data, 1, seed=j*i**2)[0]
+    return waiting_times
+
+def core_simulation(r_i, lengths, adj_matrix, inlets, timesteps,  pnm_params, peak_fun, i, pnm, diff_data, R0=1):
+    size = len(r_i)
+    prng = np.random.RandomState(i)
+    waiting_times = from_ecdf(diff_data, size, seed=i+1)
+    waiting_times = extend_waiting_time(waiting_times, from_ecdf, peak_fun(prng.rand(size)), diff_data, i)
+    
+    #  pass the pnm with the experimental activation time in the case of running the validation samples
+    # time, V, V0, activation_time, filling_time = simulation(r_i, lengths, waiting_times, adj_matrix, inlets, timesteps, node_dict = pnm.label_dict, pnm = pnm, R0=R0,sample=pnm.sample)
+    time, V, V0, activation_time, filling_time = simulation(r_i, lengths, waiting_times, adj_matrix, inlets, timesteps, node_dict = pnm.label_dict, R0=R0,sample=pnm.sample)
+    V_fun = interp1d(time, V, fill_value = 'extrapolate')
+    
+    new_time = np.arange(3000)
+    new_V = V_fun(new_time)
+    new_V[new_V>V0] = V0
+   
+    return new_time, new_V, V0, activation_time, filling_time, waiting_times
+
+def core_function(samples, timesteps, i, peak_fun=peak_fun, inlet_count = 2, diff_data=None):
+    prng3 = np.random.RandomState(i)
+    sample = prng3.choice(samples)
+    pnm_params = {
+           'data_path': r"Z:\Robert_TOMCAT_3_netcdf4_archives\for_PNM",
+          # 'data_path': r"A:\Robert_TOMCAT_3_netcdf4_archives\processed_1200_dry_seg_aniso_sep",
+            'sample': sample,
+            'graph': nx.watts_strogatz_graph(400,8,0.1, seed=i+1),
+        # 'sample': 'T3_100_7_III',
+        # 'sample': 'T3_025_3_III',
+        # 'sample': 'T3_300_8_III',
+          'inlet_count': inlet_count+2,
+           'randomize_pore_data': True,
+          'seed': (i+3)**3
+    }
+
+    pnm = PNM(**pnm_params)
+    graph = pnm.graph.copy()
+    R0 = 1#E17#4E15
+    
+    
+    
