@@ -61,7 +61,8 @@ class PNM:
         rand_pore_props = False,
         rand_waiting_times = False,
         verbose = False,
-        seed = int(time.time())
+        seed = int(time.time()),
+        randomize_pore_data = False
     ):
         self.job_count = job_count
         self.verbose = verbose
@@ -70,6 +71,7 @@ class PNM:
         self.sample = sample # Sample name
         
         self.seed = seed
+        self.randomize_pore_data = randomize_pore_data
 
         dyn_data_dir, pore_props_dir, pore_diff_dir = \
             'dyn_data', 'pore_props', 'pore_diffs'
@@ -102,6 +104,7 @@ class PNM:
 
         self.radi = None
         self.heights = None
+        # self.volumes = None
 
         if path.isfile(self.exp_data_path) and not rand_exp_data:
             print('Reading the experimental dataset at {}'.format(self.exp_data_path))
@@ -155,8 +158,8 @@ class PNM:
         im = label_matrix
 
         struct = cube # ball does not work as you would think (anisotropic expansion)
-        if im.ndim == 2:
-            struct = disk
+        # if im.ndim == 2:
+            # struct = disk
 
         crude_pores = sp.ndimage.find_objects(im)
 
@@ -231,15 +234,16 @@ class PNM:
             tmax = time_limit[self.sample]
         
         relevant_labels = list(self.label_dict.keys())
-        radi = self.radi = px*np.sqrt(pore_data['value_properties'].sel(property = 'median_area', label = relevant_labels).data/np.pi)
-        heights = self.heights = px*pore_data['value_properties'].sel(property = 'major_axis', label = relevant_labels).data
+        
+        radi = self.radi = px*np.sqrt(pore_data['value_properties'].sel(property = 'median_area').data/np.pi) #, label = relevant_labels
+        heights = self.heights = px*pore_data['value_properties'].sel(property = 'major_axis').data #, label = relevant_labels
         # volumes = self.volumes = vx*pore_data['value_properties'].sel(property = 'volume', label = relevant_labels).data
-        volumes =  vx*self.data['volume'][:,tmax-10:tmax-1].sel(label = relevant_labels).median(dim='time').data
+        volumes =  vx*self.data['volume'][:,tmax-10:tmax-1].sel().median(dim='time').data#, label = relevant_labels
         volumes[volumes==0] = np.median(volumes[volumes>0])
         self.volumes = volumes
         size = self.labels.max() + 1
         
-        if self.data is None:
+        if self.data is None or self.randomize_pore_data == True:
             # corr = exp_data['sig_fit_data'].sel(sig_fit_var = 'alpha [vx]')/pore_data['value_properties'].sel(property = 'volume', label = exp_data['label'])
             # pore_data['value_properties'].sel(property = 'median_area', label = exp_data['label']) = 1/corr*pore_data['value_properties'].sel(property = 'median_area', label = exp_data['label'])
             # pore_data['value_properties'].sel(property = 'major_axis', label = exp_data['label']) = corr
@@ -253,13 +257,18 @@ class PNM:
 
             # TODO: couple radii and heights because they correlate slightly, currently the pore resulting pore volumes are too small
             # or, mix distribution functions of height, radius and volume. Something to think about ... for later ...
-            ecdf_radi, ecdf_heights = ECDF(radi), ECDF(heights)
-            random_input = lambda size: np.random.rand(size)
-            factored_input = lambda size, factor: factor*np.ones(size) # factored_input(size, 0.7)
+            ecdf_radi, ecdf_heights, ecdf_volumes = ECDF(radi), ECDF(heights), ECDF(volumes)
+            seed = self.seed
+            prngpore = np.random.RandomState(seed)
+            prngpore2 = np.random.RandomState(seed*7+117)
+            random_input1 = lambda size: prngpore.rand(size)
+            random_input2 = lambda size: prngpore2.rand(size)
+            # factored_input = lambda size, factor: factor*np.ones(size) # factored_input(size, 0.7)
 
-            self.radi = interp1d(ecdf_radi.y[1:], ecdf_radi.x[1:], fill_value = 'extrapolate')(random_input(size))
-            self.heights = interp1d(ecdf_heights.y[1:], ecdf_heights.x[1:], fill_value = 'extrapolate')(random_input(size))
-
+            radi = self.radi = interp1d(ecdf_radi.y[1:], ecdf_radi.x[1:], fill_value = 'extrapolate')(random_input1(size))
+            self.heights = interp1d(ecdf_heights.y[1:], ecdf_heights.x[1:], fill_value = 'extrapolate')(random_input2(size))
+            volumes = self.volumes = interp1d(ecdf_volumes.y[1:], ecdf_volumes.x[1:], fill_value = 'extrapolate')(random_input2(size))    
+            # self.heights = volumes/np.pi/radi**2
     def generate_waiting_times(self):
         size = self.labels.max() + 1
         data = self.pore_diff_data

@@ -24,14 +24,16 @@ from wickingpnm.old_school_DPNM_v5 import simulation
 import xarray as xr
 import os
 import robpylib
+import pickle
 
 temp_folder = r"Z:\users\firo\joblib_tmp"
+temp_folder = None
 
 # TODO: build random sample choice
 
 ecdf = robpylib.CommonFunctions.Tools.weighted_ecdf
 
-sourceFolder = r"A:\Robert_TOMCAT_3_netcdf4_archives\processed_1200_dry_seg_aniso_sep"
+sourceFolder = r"Z:\Robert_TOMCAT_3_netcdf4_archives\processed_1200_dry_seg_aniso_sep"
 
 #  extract distribution of peaks per pore
 peak_num = np.array([])
@@ -220,20 +222,22 @@ def core_function(samples, timesteps, i, peak_fun=peak_fun, inlet_count = 2, dif
     prng3 = np.random.RandomState(i)
     sample = prng3.choice(samples)
     pnm_params = {
-           'data_path': r"A:\Robert_TOMCAT_3_netcdf4_archives\for_PNM",
+           'data_path': r"Z:\Robert_TOMCAT_3_netcdf4_archives\for_PNM",
           # 'data_path': r"A:\Robert_TOMCAT_3_netcdf4_archives\processed_1200_dry_seg_aniso_sep",
             'sample': sample,
+            'graph': nx.watts_strogatz_graph(400,8,0.1, seed=i+1),
         # 'sample': 'T3_100_7_III',
         # 'sample': 'T3_025_3_III',
         # 'sample': 'T3_300_8_III',
-          'inlet_count': inlet_count,
-        'seed': (i+3)**3
+          'inlet_count': inlet_count+2,
+           'randomize_pore_data': True,
+          'seed': (i+3)**3
     }
 
     pnm = PNM(**pnm_params)
     graph = pnm.graph.copy()
     R0 = 1#E17#4E15
-    
+    # print('inlet R '+str(R0))
     
     # ####fixed inlets for validation samples##############
     # inlet_nodes = [162,171,207]
@@ -257,11 +261,28 @@ def core_function(samples, timesteps, i, peak_fun=peak_fun, inlet_count = 2, dif
     
     if diff_data is None:    
         diff_data = pnm.pore_diff_data
-        
-        
+    
+    sourcesraw = np.unique(pnm.data['label_matrix'][:,:,0])[1:]
+    targetsraw = np.unique(pnm.data['label_matrix'][:,:,-1])[1:]
+
+    sources = []
+    targets = []
+    for k in sourcesraw:
+        if k in graph.nodes():
+            sources.append(k)
+    for k in targetsraw:
+        if k in graph.nodes():
+            targets.append(k)
+    sources2 = sources.copy()
     inlets = pnm.inlets.copy()  
+    # prng7 = np.random.RandomState(i+3)
+    # # inlets = prng7.choice(sources, 2)
+    # sources = prng7.choice(sources, 4)
+    # inlets = sources
+    
     found_inlets = []
     for inlet in inlets:
+        
         found_inlets.append(pnm.nodes[inlet])
 
 
@@ -269,6 +290,7 @@ def core_function(samples, timesteps, i, peak_fun=peak_fun, inlet_count = 2, dif
     for k in range(len(inlets)):
         graph.add_edge(found_inlets[k], v_inlets[k])
     inlets = v_inlets
+    sources = inlets
             
     inlet_radii = np.zeros(len(inlets))
     inlet_heights = np.zeros(len(inlets))
@@ -282,6 +304,24 @@ def core_function(samples, timesteps, i, peak_fun=peak_fun, inlet_count = 2, dif
     
     adj_matrix = nx.to_numpy_array(graph)
     result_sim = core_simulation(r_i, lengths, adj_matrix, inlets, timesteps,  pnm_params, peak_fun, i, pnm, diff_data, R0=R0)
+    centrality = np.array(list(nx.betweenness_centrality(graph).values()))
+    centrality3 = np.array(list(nx.betweenness_centrality_source(graph, sources=sources2).values()))
+    centrality2 = np.array(list(nx.betweenness_centrality_subset(graph, sources, targets, normalized=True).values()))
+    centrality4 = np.array(list(nx.betweenness_centrality_subset(graph, sources2, targets, normalized=True).values()))
+    centrality5 = np.array(list(nx.betweenness_centrality_source(graph, sources=sources).values()))
+    result_sim = result_sim + (centrality5,)
+    result_sim = result_sim + (centrality4,)
+    result_sim = result_sim + (centrality3,)
+    result_sim = result_sim + (centrality2,)
+    result_sim = result_sim + (pnm.data.attrs['tension'], centrality)
+    
+    # V0 = result_sim[2]
+    time = result_sim[0]
+    V = result_sim[1]
+    ref = np.argmax(V)
+    mean_flux = V[ref]/time[ref]
+    result_sim = result_sim + (mean_flux,)
+    result_sim = result_sim + (graph, )
     
     return result_sim
 
@@ -290,7 +330,7 @@ print('Warning: diff data path is hard-coded!')
 print('Warning: Inlet resistance hard-coded')
 # print('Warning peak number hard-coded to 1')
 njobs = 32
-timesteps = 1000000#0#0#0
+timesteps = 5000000#0#0#0
 
 # multi-sample run
 paper_samples = [
@@ -313,23 +353,29 @@ paper_samples = [
 
 not_extreme_samples = paper_samples
 not_extreme_samples.remove('T3_100_1') #processing artefacts from moving sample
-# not_extreme_samples.remove('T3_025_4') #very little uptake
-# not_extreme_samples.remove('T3_025_9_III') #very little uptake
+not_extreme_samples.remove('T3_025_4') #very little uptake --> v3
+not_extreme_samples.remove('T3_025_9_III') #very little uptake --> v2,v3
 # not_extreme_samples.remove('T3_300_4') #very little uptake
 # not_extreme_samples.remove('T3_100_7') #very little uptake
 
 
 # temp_folder = None
-results = Parallel(n_jobs=njobs, temp_folder=temp_folder)(delayed(core_function)(not_extreme_samples, timesteps, i+5) for i in range(512))  
-# results = Parallel(n_jobs=njobs)(delayed(core_function)(not_extreme_samples, timesteps, i, diff_data=[comb_diff_data, comb_weight_data]) for i in range(16))  
+results = Parallel(n_jobs=njobs, temp_folder=temp_folder)(delayed(core_function)(not_extreme_samples, timesteps, i+5) for i in range(128))  
+# results = Parallel(n_jobs=njobs)(delayed(core_function)(not_extreme_samples, timesteps, i, diff_data=[comb_diff_data, comb_weight_data]) for i in range(3*512))  
  
+# result = core_function(not_extreme_samples, timesteps, 1)
+
+dumpfilename = r"R:\Scratch\305\_Robert\simulation_dump\results_random.p"
+dumpfile = open(dumpfilename, 'wb')
+pickle.dump(results, dumpfile)
+dumpfile.close()
 
 # act_times = np.zeros((len(results),len(results[0][3])))
 # finish_times = np.zeros((len(results),len(results[0][3])))
 
-results_np = np.zeros((len(results),3000))
-for i in range(len(results)):
-    results_np[i,:] = results[i][1]
-    # act_times[i,:]= results[i][3]
-    # finish_times[i,:]= results[i][4]
-np.save(r"H:\11_Essential_Data\06_PNM\PNM_results_random_samples_R_1", results_np)
+# results_np = np.zeros((len(results),3000))
+# for i in range(len(results)):
+#     results_np[i,:] = results[i][1]
+#     # act_times[i,:]= results[i][3]
+#     # finish_times[i,:]= results[i][4]
+# np.save(r"H:\11_Essential_Data\06_PNM\PNM_results_random_samples_R_1_v3", results_np)
