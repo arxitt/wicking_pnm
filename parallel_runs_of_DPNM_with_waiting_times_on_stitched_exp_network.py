@@ -247,9 +247,9 @@ def stitch_graphs(graph1, graph2, top_nodes1, bottom_nodes2, level):
         
     # connect graphs
     # TODO: refine routine
-    connections = min(len(top_nodes1), len(nodes2))
+    connections = min(len(top_nodes1), len(bottom_nodes2))
     for i in range(connections):
-        graph2.add_edge(top_nodes1[i], nodes2[i])
+        graph2.add_edge(top_nodes1[i], bottom_nodes2[i]+1000)
     
     return graph1
 
