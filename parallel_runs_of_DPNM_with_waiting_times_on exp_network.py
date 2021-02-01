@@ -225,12 +225,12 @@ def core_function(samples, timesteps, i, peak_fun=peak_fun, inlet_count = 2, dif
            'data_path': r"Z:\Robert_TOMCAT_3_netcdf4_archives\for_PNM",
           # 'data_path': r"A:\Robert_TOMCAT_3_netcdf4_archives\processed_1200_dry_seg_aniso_sep",
             'sample': sample,
-            'graph': nx.watts_strogatz_graph(400,8,0.1, seed=i+1),
+            # 'graph': nx.watts_strogatz_graph(400,8,0.1, seed=i+1),
         # 'sample': 'T3_100_7_III',
         # 'sample': 'T3_025_3_III',
         # 'sample': 'T3_300_8_III',
-          'inlet_count': inlet_count+2,
-           'randomize_pore_data': True,
+          'inlet_count': inlet_count,
+           # 'randomize_pore_data': True,
           'seed': (i+3)**3
     }
 
