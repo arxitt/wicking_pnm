@@ -29,7 +29,7 @@ import pickle
 temp_folder = r"Z:\users\firo\joblib_tmp"
 # temp_folder = None
 
-levels = 1
+levels = 2
 
 # TODO: build random sample choice
 
@@ -399,11 +399,11 @@ not_extreme_samples.remove('T3_025_9_III') #very little uptake --> v2,v3
 # not_extreme_samples.remove('T3_300_4') #very little uptake
 # not_extreme_samples.remove('T3_100_7') #very little uptake
 
-results = Parallel(n_jobs=njobs, temp_folder=temp_folder)(delayed(core_function)(not_extreme_samples, timesteps, i+5, levels=levels) for i in range(128))  
+# results = Parallel(n_jobs=njobs, temp_folder=temp_folder)(delayed(core_function)(not_extreme_samples, timesteps, i+5, levels=levels) for i in range(128))  
 # results = Parallel(n_jobs=njobs)(delayed(core_function)(not_extreme_samples, timesteps, i, diff_data=[comb_diff_data, comb_weight_data]) for i in range(3*512))  
  
-# result = core_function(not_extreme_samples, timesteps, 1, levels=levels)
-# results = result
+result = core_function(not_extreme_samples, timesteps, 1, levels=levels)
+results = result
 
 
 dumpfilename = r"R:\Scratch\305\_Robert\simulation_dump\results_stitched.p"
