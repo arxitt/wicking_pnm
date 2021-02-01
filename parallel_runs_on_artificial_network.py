@@ -24,8 +24,10 @@ import xarray as xr
 import os
 import robpylib
 import pickle
+import time
 
-
+time0 = time.time()
+n=10
 
 ecdf = robpylib.CommonFunctions.Tools.weighted_ecdf
 
@@ -155,14 +157,14 @@ def core_simulation(r_i, lengths, adj_matrix, inlets, timesteps,  pnm_params, pe
    
     return new_time, new_V, V0, activation_time, filling_time, waiting_times
 
-def core_function(samples, timesteps, i, peak_fun=peak_fun, inlet_count = 2, diff_data=None):
+def core_function(samples, timesteps, i, peak_fun=peak_fun, inlet_count = 2, diff_data=None, n=n):
     prng3 = np.random.RandomState(i)
     sample = prng3.choice(samples)
     pnm_params = {
            'data_path': r"A:\Robert_TOMCAT_3_netcdf4_archives\for_PNM",
           # 'data_path': r"A:\Robert_TOMCAT_3_netcdf4_archives\processed_1200_dry_seg_aniso_sep",
             'sample': sample,
-            'graph': nx.watts_strogatz_graph(400,8,0.1, seed=i+1),
+            'graph': nx.watts_strogatz_graph(n,8,0.1, seed=i+1),
         # 'sample': 'T3_100_7_III',
         # 'sample': 'T3_025_3_III',
         # 'sample': 'T3_300_8_III',
@@ -246,6 +248,8 @@ temp_folder = r"Z:\users\firo\joblib_tmp"
 # results = Parallel(n_jobs=njobs, temp_folder=temp_folder)(delayed(core_function)(not_extreme_samples, timesteps, i+5) for i in range(128))  
 result = core_function(not_extreme_samples, timesteps, 5)
 results = result
+time_testing.append((n,time.time()-time0))
+
 # dumpfilename = r"R:\Scratch\305\_Robert\simulation_dump\results_random2.p"
 # dumpfile = open(dumpfilename, 'wb')
 # pickle.dump(results, dumpfile)
