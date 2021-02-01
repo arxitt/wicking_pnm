@@ -30,7 +30,7 @@ import pickle
 ecdf = robpylib.CommonFunctions.Tools.weighted_ecdf
 
 
-sourceFolder = r"Z:\Robert_TOMCAT_3_netcdf4_archives\processed_1200_dry_seg_aniso_sep"
+sourceFolder = r"A:\Robert_TOMCAT_3_netcdf4_archives\processed_1200_dry_seg_aniso_sep"
 
 #  extract distribution of peaks per pore
 peak_num = np.array([])
@@ -159,7 +159,7 @@ def core_function(samples, timesteps, i, peak_fun=peak_fun, inlet_count = 2, dif
     prng3 = np.random.RandomState(i)
     sample = prng3.choice(samples)
     pnm_params = {
-           'data_path': r"Z:\Robert_TOMCAT_3_netcdf4_archives\for_PNM",
+           'data_path': r"A:\Robert_TOMCAT_3_netcdf4_archives\for_PNM",
           # 'data_path': r"A:\Robert_TOMCAT_3_netcdf4_archives\processed_1200_dry_seg_aniso_sep",
             'sample': sample,
             'graph': nx.watts_strogatz_graph(400,8,0.1, seed=i+1),
@@ -238,9 +238,10 @@ not_extreme_samples.remove('T3_025_9_III') #very little uptake --> v2,v3
 # not_extreme_samples.remove('T3_300_4') #very little uptake
 # not_extreme_samples.remove('T3_100_7') #very little uptake
 temp_folder = None
+temp_folder = r"Z:\users\firo\joblib_tmp"
 results = Parallel(n_jobs=njobs, temp_folder=temp_folder)(delayed(core_function)(not_extreme_samples, timesteps, i+5) for i in range(128))  
 
-dumpfilename = r"R:\Scratch\305\_Robert\simulation_dump\results_random.p"
+dumpfilename = r"R:\Scratch\305\_Robert\simulation_dump\results_random2.p"
 dumpfile = open(dumpfilename, 'wb')
 pickle.dump(results, dumpfile)
 dumpfile.close()
