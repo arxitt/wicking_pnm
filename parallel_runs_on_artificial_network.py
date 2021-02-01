@@ -197,6 +197,10 @@ def core_function(samples, timesteps, i, peak_fun=peak_fun, inlet_count = 2, dif
     r_i = np.concatenate([r_i, inlet_radii])
     lengths = np.concatenate([lengths, inlet_heights])
     adj_matrix = nx.to_numpy_array(graph)
+    
+    if diff_data is None:    
+        diff_data = pnm.pore_diff_data
+    
     result_sim = core_simulation(r_i, lengths, adj_matrix, inlets, timesteps,  pnm_params, peak_fun, i, pnm, diff_data, R0=R0)
     
     # V0 = result_sim[2]
