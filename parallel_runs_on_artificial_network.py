@@ -245,6 +245,7 @@ temp_folder = None
 temp_folder = r"Z:\users\firo\joblib_tmp"
 # results = Parallel(n_jobs=njobs, temp_folder=temp_folder)(delayed(core_function)(not_extreme_samples, timesteps, i+5) for i in range(128))  
 result = core_function(not_extreme_samples, timesteps, 5)
+results = result
 # dumpfilename = r"R:\Scratch\305\_Robert\simulation_dump\results_random2.p"
 # dumpfile = open(dumpfilename, 'wb')
 # pickle.dump(results, dumpfile)
