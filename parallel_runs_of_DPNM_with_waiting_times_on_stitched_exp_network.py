@@ -246,6 +246,9 @@ def stitch_graphs(graph1, graph2, top_nodes1, bottom_nodes2, level):
         graph2.add_edge(edge[0], edge[1])
         
     # connect graphs
+    connections = min(len(top_nodes1), len(bottom_nodes2))
+    for i in range(connections):
+        graph2.add_edge(top_nodes1[i], bottom_nodes2[i])
     
     return graph1
 
