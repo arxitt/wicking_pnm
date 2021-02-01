@@ -18,7 +18,7 @@ import numpy as np
 from scipy.interpolate import interp1d
 from joblib import Parallel, delayed
 import networkx as nx
-from wickingpnm.model import PNM
+from wickingpnm.model_for_art_sim import PNM
 from wickingpnm.old_school_DPNM_v5 import simulation
 import xarray as xr
 import os
