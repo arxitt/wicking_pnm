@@ -238,7 +238,7 @@ class PNM:
         radi = self.radi = px*np.sqrt(pore_data['value_properties'].sel(property = 'median_area', label = relevant_labels).data/np.pi) #
         heights = self.heights = px*pore_data['value_properties'].sel(property = 'major_axis', label = relevant_labels).data #
         # volumes = self.volumes = vx*pore_data['value_properties'].sel(property = 'volume', label = relevant_labels).data
-        volumes =  vx*self.data['volume'][:,tmax-10:tmax-1].sel().median(dim='time', label = relevant_labels).data#
+        volumes =  vx*self.data['volume'][:,tmax-10:tmax-1].sel(label = relevant_labels).median(dim='time').data#
         volumes[volumes==0] = np.median(volumes[volumes>0])
         self.volumes = volumes
         size = self.labels.max() + 1
