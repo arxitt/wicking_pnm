@@ -23,6 +23,7 @@ from wickingpnm.old_school_DPNM_v5 import simulation
 import xarray as xr
 import os
 import robpylib
+import pickle
 
 
 
@@ -174,5 +175,72 @@ def core_function(samples, timesteps, i, peak_fun=peak_fun, inlet_count = 2, dif
     graph = pnm.graph.copy()
     R0 = 1#E17#4E15
     
+    inlets = pnm.inlets.copy()
     
+    found_inlets = []
+    for inlet in inlets:
+        
+        found_inlets.append(pnm.nodes[inlet])
+
+
+    v_inlets = -1*(np.arange(len(inlets))+1)
+    for k in range(len(inlets)):
+        graph.add_edge(found_inlets[k], v_inlets[k])
+    inlets = v_inlets
     
+    inlet_radii = np.zeros(len(inlets))
+    inlet_heights = np.zeros(len(inlets))  
+    
+    r_i = pnm.radi.copy()
+    lengths = pnm.volumes.copy()/np.pi/r_i**2
+    
+    r_i = np.concatenate([r_i, inlet_radii])
+    lengths = np.concatenate([lengths, inlet_heights])
+    adj_matrix = nx.to_numpy_array(graph)
+    result_sim = core_simulation(r_i, lengths, adj_matrix, inlets, timesteps,  pnm_params, peak_fun, i, pnm, diff_data, R0=R0)
+    
+    # V0 = result_sim[2]
+    time = result_sim[0]
+    V = result_sim[1]
+    ref = np.argmax(V)
+    mean_flux = V[ref]/time[ref]
+    result_sim = result_sim + (mean_flux,)
+    result_sim = result_sim + (graph, )
+    
+    return result_sim
+
+njobs = 32
+timesteps = 5000000#0#0#0
+
+# multi-sample run
+paper_samples = [
+    'T3_025_3_III',
+    'T3_025_4',
+    'T3_025_7_II',
+    'T3_025_9_III',
+    'T3_100_1',
+    'T3_100_10',
+    'T3_100_10_III',
+    'T3_100_4_III',
+    'T3_100_6',
+    'T3_100_7',
+    'T3_100_7_III',
+    'T3_300_3',
+    'T3_300_4',
+    'T3_300_8_III',
+    'T3_300_9_III'
+]
+
+not_extreme_samples = paper_samples
+not_extreme_samples.remove('T3_100_1') #processing artefacts from moving sample
+not_extreme_samples.remove('T3_025_4') #very little uptake --> v3
+not_extreme_samples.remove('T3_025_9_III') #very little uptake --> v2,v3
+# not_extreme_samples.remove('T3_300_4') #very little uptake
+# not_extreme_samples.remove('T3_100_7') #very little uptake
+temp_folder = None
+results = Parallel(n_jobs=njobs, temp_folder=temp_folder)(delayed(core_function)(not_extreme_samples, timesteps, i+5) for i in range(128))  
+
+dumpfilename = r"R:\Scratch\305\_Robert\simulation_dump\results_random.p"
+dumpfile = open(dumpfilename, 'wb')
+pickle.dump(results, dumpfile)
+dumpfile.close()
