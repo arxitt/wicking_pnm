@@ -286,7 +286,7 @@ def core_function(samples, timesteps, i, peak_fun=peak_fun, inlet_count = 2, dif
         lengths = np.concatenate([lengths, l2])
         volumes = np.concatenate([volumes, v2])
         graph = stitch_graphs(graph, graph2, tops_level1, bottoms2, level)
-        tops_level1 = tops2
+        tops_level1 = tops2+1000*level
    
     targets = tops_level1
         
