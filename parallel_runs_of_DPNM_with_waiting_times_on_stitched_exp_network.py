@@ -243,7 +243,7 @@ def stitch_graphs(graph1, graph2, top_nodes1, bottom_nodes2, level):
     for node in nodes2:
         graph1.add_node(node)
     for edge in edges2:
-        graph2.add_edge(edge[0], edge[1])
+        graph1.add_edge(edge[0], edge[1])
         
     # connect graphs
     # TODO: refine routine
@@ -288,86 +288,87 @@ def core_function(samples, timesteps, i, peak_fun=peak_fun, inlet_count = 2, dif
         graph = stitch_graphs(graph, graph2, tops_level1, bottoms2, level)
         tops_level1 = tops2
    
-    targets = tops_level1
+    # targets = tops_level1
         
     
-    R0 = 1#E17#4E15
-    # print('inlet R '+str(R0))
+    # R0 = 1#E17#4E15
+    # # print('inlet R '+str(R0))
     
-    # ####fixed inlets for validation samples##############
-    # inlet_nodes = [162,171,207]
-    # if pnm.sample == 'T3_100_7_III': inlet_nodes = [86, 89, 90, 52]
-    # if pnm.sample == 'T3_300_8_III': inlet_nodes = [   13,    63,   149]
-    # inlets = []
-    # found_inlets = []
-    # for inlet in inlet_nodes:
-    #     inlet = int(inlet)
-    #     if inlet in pnm.label_dict:
-    #         inlets.append(pnm.label_dict[inlet])
-    #         found_inlets.append(inlet)
-    #     else:
-    #         print('Failed to find node named', inlet)
+    # # ####fixed inlets for validation samples##############
+    # # inlet_nodes = [162,171,207]
+    # # if pnm.sample == 'T3_100_7_III': inlet_nodes = [86, 89, 90, 52]
+    # # if pnm.sample == 'T3_300_8_III': inlet_nodes = [   13,    63,   149]
+    # # inlets = []
+    # # found_inlets = []
+    # # for inlet in inlet_nodes:
+    # #     inlet = int(inlet)
+    # #     if inlet in pnm.label_dict:
+    # #         inlets.append(pnm.label_dict[inlet])
+    # #         found_inlets.append(inlet)
+    # #     else:
+    # #         print('Failed to find node named', inlet)
 
-    # print('Got inlet labels:', inlets)
+    # # print('Got inlet labels:', inlets)
    
-    # pnm1.inlets = inlets
-    # pnm1.build_inlets()
-    ############# 
+    # # pnm1.inlets = inlets
+    # # pnm1.build_inlets()
+    # ############# 
     
     
-    if diff_data is None:    
-        diff_data = pnm.pore_diff_data
+    # if diff_data is None:    
+    #     diff_data = pnm.pore_diff_data
         
     
-    #  TODO: inlets have to be at the bottom or at least in the first level
-    inlets = pnm.inlets.copy()  # <- in first level
-    prng7 = np.random.RandomState(i+3)
-    inlets = prng7.choice(sources2, 2) #bottom of fisrt level
-    # sources = prng7.choice(sources, 4)
-    # inlets = sources
+    # #  TODO: inlets have to be at the bottom or at least in the first level
+    # inlets = pnm.inlets.copy()  # <- in first level
+    # prng7 = np.random.RandomState(i+3)
+    # inlets = prng7.choice(sources2, 2) #bottom of fisrt level
+    # # sources = prng7.choice(sources, 4)
+    # # inlets = sources
     
-    found_inlets = []
-    for inlet in inlets:
+    # found_inlets = []
+    # for inlet in inlets:
         
-        found_inlets.append(pnm.nodes[inlet])
+    #     found_inlets.append(pnm.nodes[inlet])
 
 
-    v_inlets = -1*(np.arange(len(inlets))+1)
-    for k in range(len(inlets)):
-        graph.add_edge(found_inlets[k], v_inlets[k])
-    inlets = v_inlets
-    sources = inlets
+    # v_inlets = -1*(np.arange(len(inlets))+1)
+    # for k in range(len(inlets)):
+    #     graph.add_edge(found_inlets[k], v_inlets[k])
+    # inlets = v_inlets
+    # sources = inlets
             
-    inlet_radii = np.zeros(len(inlets))
-    inlet_heights = np.zeros(len(inlets))
+    # inlet_radii = np.zeros(len(inlets))
+    # inlet_heights = np.zeros(len(inlets))
     
 
     
-    r_i = np.concatenate([r_i, inlet_radii])
-    lengths = np.concatenate([lengths, inlet_heights])
+    # r_i = np.concatenate([r_i, inlet_radii])
+    # lengths = np.concatenate([lengths, inlet_heights])
     
-    adj_matrix = nx.to_numpy_array(graph)
-    result_sim = core_simulation(r_i, lengths, adj_matrix, inlets, timesteps,  pnm_params, peak_fun, i, pnm, diff_data, R0=R0)
-    centrality = np.array(list(nx.betweenness_centrality(graph).values()))
-    centrality3 = np.array(list(nx.betweenness_centrality_source(graph, sources=sources2).values()))
-    centrality2 = np.array(list(nx.betweenness_centrality_subset(graph, sources, targets, normalized=True).values()))
-    centrality4 = np.array(list(nx.betweenness_centrality_subset(graph, sources2, targets, normalized=True).values()))
-    centrality5 = np.array(list(nx.betweenness_centrality_source(graph, sources=sources).values()))
-    result_sim = result_sim + (centrality5,)
-    result_sim = result_sim + (centrality4,)
-    result_sim = result_sim + (centrality3,)
-    result_sim = result_sim + (centrality2,)
-    result_sim = result_sim + (pnm.data.attrs['tension'], centrality)
+    # adj_matrix = nx.to_numpy_array(graph)
+    # result_sim = core_simulation(r_i, lengths, adj_matrix, inlets, timesteps,  pnm_params, peak_fun, i, pnm, diff_data, R0=R0)
+    # centrality = np.array(list(nx.betweenness_centrality(graph).values()))
+    # centrality3 = np.array(list(nx.betweenness_centrality_source(graph, sources=sources2).values()))
+    # centrality2 = np.array(list(nx.betweenness_centrality_subset(graph, sources, targets, normalized=True).values()))
+    # centrality4 = np.array(list(nx.betweenness_centrality_subset(graph, sources2, targets, normalized=True).values()))
+    # centrality5 = np.array(list(nx.betweenness_centrality_source(graph, sources=sources).values()))
+    # result_sim = result_sim + (centrality5,)
+    # result_sim = result_sim + (centrality4,)
+    # result_sim = result_sim + (centrality3,)
+    # result_sim = result_sim + (centrality2,)
+    # result_sim = result_sim + (pnm.data.attrs['tension'], centrality)
     
-    # V0 = result_sim[2]
-    time = result_sim[0]
-    V = result_sim[1]
-    ref = np.argmax(V)
-    mean_flux = V[ref]/time[ref]
-    result_sim = result_sim + (mean_flux,)
-    result_sim = result_sim + (graph, )
+    # # V0 = result_sim[2]
+    # time = result_sim[0]
+    # V = result_sim[1]
+    # ref = np.argmax(V)
+    # mean_flux = V[ref]/time[ref]
+    # result_sim = result_sim + (mean_flux,)
+    # result_sim = result_sim + (graph, )
     
-    return result_sim
+    # return result_sim
+    return graph
 
 print('Warning: diff data path is hard-coded!')
 # print('Warning: Inlets and inlet resistance hard-coded')
