@@ -29,7 +29,7 @@ import pickle
 temp_folder = r"Z:\users\firo\joblib_tmp"
 # temp_folder = None
 
-levels = 2
+levels = 3
 
 # TODO: build random sample choice
 
@@ -358,7 +358,6 @@ def core_function(samples, timesteps, i, peak_fun=peak_fun, inlet_count = 2, dif
     result_sim = result_sim + (centrality3,)
     result_sim = result_sim + (centrality2,)
     result_sim = result_sim + (pnm.data.attrs['tension'], centrality)
-    
     # V0 = result_sim[2]
     time = result_sim[0]
     V = result_sim[1]
