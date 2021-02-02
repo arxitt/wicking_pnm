@@ -268,7 +268,9 @@ def core_simulation(r_i, lengths, adj_matrix, inlets, timesteps,  pnm_params, pe
     time, V, V0, activation_time, filling_time = simulation(r_i, lengths, waiting_times, adj_matrix, inlets, timesteps, node_dict = pnm.label_dict, R0=R0,sample=pnm.sample)
     V_fun = interp1d(time, V, fill_value = 'extrapolate')
     
-    new_time = np.arange(3000)
+    max_time = filling_time.max()
+    # new_time = np.arange(3000)
+    new_time = np.linspace(0,max_time,num=3000)
     new_V = V_fun(new_time)
     new_V[new_V>V0] = V0
    
@@ -286,7 +288,7 @@ def core_function(samples, timesteps, i, peak_fun=peak_fun, inlet_count = 2, dif
         lengths = np.concatenate([lengths, l2])
         volumes = np.concatenate([volumes, v2])
         graph = stitch_graphs(graph, graph2, tops_level1, bottoms2, level)
-        tops_level1 = tops2+1000*level
+        tops_level1 = np.array(tops2)+1000*level
    
     targets = tops_level1
         

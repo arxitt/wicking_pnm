@@ -28,9 +28,9 @@ import time
 
 time0 = time.time()
 
-xs = 2
-ys = 2
-zs = 4
+xs = 4
+ys = 4
+zs = 6
 n = xs*ys*zs
 
 ecdf = robpylib.CommonFunctions.Tools.weighted_ecdf
@@ -154,8 +154,9 @@ def core_simulation(r_i, lengths, adj_matrix, inlets, timesteps,  pnm_params, pe
     # time, V, V0, activation_time, filling_time = simulation(r_i, lengths, waiting_times, adj_matrix, inlets, timesteps, node_dict = pnm.label_dict, pnm = pnm, R0=R0,sample=pnm.sample)
     time, V, V0, activation_time, filling_time = simulation(r_i, lengths, waiting_times, adj_matrix, inlets, timesteps, node_dict = pnm.label_dict, R0=R0,sample=pnm.sample)
     V_fun = interp1d(time, V, fill_value = 'extrapolate')
-    
-    new_time = np.arange(3000)
+    max_time = filling_time.max()
+    # new_time = np.arange(3000)
+    new_time = np.linspace(0,max_time,num=3000)
     new_V = V_fun(new_time)
     new_V[new_V>V0] = V0
    
@@ -199,8 +200,11 @@ def core_function(samples, timesteps, i, peak_fun=peak_fun, inlet_count = 2, dif
     inlet_radii = np.zeros(len(inlets))
     inlet_heights = np.zeros(len(inlets))  
     
+    # TO DO: if you choose r_i and volume indepently from distribution, it is possible
+    # to get infitive large pores --> change to aspect ratio or directly choose lengths
     r_i = pnm.radi.copy()
     lengths = pnm.volumes.copy()/np.pi/r_i**2
+    # lengths = pnm.lengths.copy()
     
     r_i = np.concatenate([r_i, inlet_radii])
     lengths = np.concatenate([lengths, inlet_heights])
@@ -217,12 +221,14 @@ def core_function(samples, timesteps, i, peak_fun=peak_fun, inlet_count = 2, dif
     ref = np.argmax(V)
     mean_flux = V[ref]/time[ref]
     result_sim = result_sim + (mean_flux,)
+    result_sim = result_sim + (lengths,)
+    result_sim = result_sim + (r_i,)
     result_sim = result_sim + (graph, )
     
     return result_sim
 
 njobs = 32
-timesteps = 5000000#0#0#0
+timesteps = int(5000000*n/120)#0#0#0
 
 # multi-sample run
 paper_samples = [
