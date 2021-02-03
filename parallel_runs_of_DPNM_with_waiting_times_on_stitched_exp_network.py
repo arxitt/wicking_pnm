@@ -29,7 +29,7 @@ import pickle
 temp_folder = r"Z:\users\firo\joblib_tmp"
 # temp_folder = None
 
-levels = 3
+levels = 5
 
 # TODO: build random sample choice
 
@@ -204,10 +204,10 @@ def get_network_parameter(i, samples, inlet_count, return_pnm=False):
     pnm_params = {
            'data_path': r"A:\Robert_TOMCAT_3_netcdf4_archives\for_PNM",
           # 'data_path': r"A:\Robert_TOMCAT_3_netcdf4_archives\processed_1200_dry_seg_aniso_sep",
-            'sample': sample,
+            # 'sample': sample,
             # 'graph': nx.watts_strogatz_graph(400,8,0.1, seed=i+1),
         # 'sample': 'T3_100_7_III',
-        # 'sample': 'T3_025_3_III',
+        'sample': 'T3_025_3_III',
         # 'sample': 'T3_300_8_III',
           'inlet_count': inlet_count,
            # 'randomize_pore_data': True,

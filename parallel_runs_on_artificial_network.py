@@ -28,9 +28,9 @@ import time
 
 time0 = time.time()
 
-xs = 4
-ys = 4
-zs = 6
+xs = 2
+ys = 2
+zs = 3
 n = xs*ys*zs
 
 ecdf = robpylib.CommonFunctions.Tools.weighted_ecdf
@@ -152,7 +152,7 @@ def core_simulation(r_i, lengths, adj_matrix, inlets, timesteps,  pnm_params, pe
     
     #  pass the pnm with the experimental activation time in the case of running the validation samples
     # time, V, V0, activation_time, filling_time = simulation(r_i, lengths, waiting_times, adj_matrix, inlets, timesteps, node_dict = pnm.label_dict, pnm = pnm, R0=R0,sample=pnm.sample)
-    time, V, V0, activation_time, filling_time = simulation(r_i, lengths, waiting_times, adj_matrix, inlets, timesteps, node_dict = pnm.label_dict, R0=R0,sample=pnm.sample)
+    time, V, V0, activation_time, filling_time = simulation(r_i, lengths, waiting_times*0, adj_matrix, inlets, timesteps, node_dict = pnm.label_dict, R0=R0,sample=pnm.sample)
     V_fun = interp1d(time, V, fill_value = 'extrapolate')
     max_time = filling_time.max()
     # new_time = np.arange(3000)
@@ -181,7 +181,9 @@ def core_function(samples, timesteps, i, peak_fun=peak_fun, inlet_count = 2, dif
 
     pnm = PNM(**pnm_params)
     graph = pnm.graph.copy()
-    R0 = 1#E17#4E15
+    
+    # FIXME: change R to increase influence of pore filling and decrease effect of waiting
+    R0 = 1E17#4E15
     
     # inlets = pnm.inlets.copy()
     inlets = np.arange(xs*ys)
@@ -203,8 +205,10 @@ def core_function(samples, timesteps, i, peak_fun=peak_fun, inlet_count = 2, dif
     # TO DO: if you choose r_i and volume indepently from distribution, it is possible
     # to get infitive large pores --> change to aspect ratio or directly choose lengths
     r_i = pnm.radi.copy()
-    lengths = pnm.volumes.copy()/np.pi/r_i**2
-    # lengths = pnm.lengths.copy()
+    # lengths = pnm.volumes.copy()/np.pi/r_i**2
+    lengths = pnm.heights.copy()
+    lengths[:] = lengths.mean()
+    r_i[:] = r_i.mean()
     
     r_i = np.concatenate([r_i, inlet_radii])
     lengths = np.concatenate([lengths, inlet_heights])
