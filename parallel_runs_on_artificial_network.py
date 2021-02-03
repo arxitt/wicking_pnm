@@ -28,10 +28,11 @@ import time
 
 time0 = time.time()
 
-xs = 2
-ys = 2
-zs = 3
+xs = 5
+ys = 5
+zs = 6
 n = xs*ys*zs
+n = 140
 
 ecdf = robpylib.CommonFunctions.Tools.weighted_ecdf
 
@@ -152,7 +153,7 @@ def core_simulation(r_i, lengths, adj_matrix, inlets, timesteps,  pnm_params, pe
     
     #  pass the pnm with the experimental activation time in the case of running the validation samples
     # time, V, V0, activation_time, filling_time = simulation(r_i, lengths, waiting_times, adj_matrix, inlets, timesteps, node_dict = pnm.label_dict, pnm = pnm, R0=R0,sample=pnm.sample)
-    time, V, V0, activation_time, filling_time = simulation(r_i, lengths, waiting_times*0, adj_matrix, inlets, timesteps, node_dict = pnm.label_dict, R0=R0,sample=pnm.sample)
+    time, V, V0, activation_time, filling_time = simulation(r_i, lengths, waiting_times, adj_matrix, inlets, timesteps, node_dict = pnm.label_dict, R0=R0,sample=pnm.sample)
     V_fun = interp1d(time, V, fill_value = 'extrapolate')
     max_time = filling_time.max()
     # new_time = np.arange(3000)
@@ -174,7 +175,7 @@ def core_function(samples, timesteps, i, peak_fun=peak_fun, inlet_count = 2, dif
         # 'sample': 'T3_100_7_III',
         # 'sample': 'T3_025_3_III',
         # 'sample': 'T3_300_8_III',
-          'inlet_count': inlet_count+2,
+          'inlet_count': inlet_count,
            'randomize_pore_data': True,
           'seed': (i+3)**3
     }
@@ -183,7 +184,7 @@ def core_function(samples, timesteps, i, peak_fun=peak_fun, inlet_count = 2, dif
     graph = pnm.graph.copy()
     
     # FIXME: change R to increase influence of pore filling and decrease effect of waiting
-    R0 = 1E17#4E15
+    R0 = 1#E17#4E15
     
     # inlets = pnm.inlets.copy()
     inlets = np.arange(xs*ys)
@@ -207,8 +208,8 @@ def core_function(samples, timesteps, i, peak_fun=peak_fun, inlet_count = 2, dif
     r_i = pnm.radi.copy()
     # lengths = pnm.volumes.copy()/np.pi/r_i**2
     lengths = pnm.heights.copy()
-    lengths[:] = lengths.mean()
-    r_i[:] = r_i.mean()
+    # lengths[:] = lengths.mean()
+    # r_i[:] = r_i.mean()
     
     r_i = np.concatenate([r_i, inlet_radii])
     lengths = np.concatenate([lengths, inlet_heights])
@@ -231,7 +232,7 @@ def core_function(samples, timesteps, i, peak_fun=peak_fun, inlet_count = 2, dif
     
     return result_sim
 
-njobs = 32
+njobs = 16
 timesteps = int(5000000*n/120)#0#0#0
 
 # multi-sample run
@@ -261,12 +262,14 @@ not_extreme_samples.remove('T3_025_9_III') #very little uptake --> v2,v3
 # not_extreme_samples.remove('T3_100_7') #very little uptake
 temp_folder = None
 temp_folder = r"Z:\users\firo\joblib_tmp"
-# results = Parallel(n_jobs=njobs, temp_folder=temp_folder)(delayed(core_function)(not_extreme_samples, timesteps, i+5) for i in range(128))  
-result = core_function(not_extreme_samples, timesteps, 5)
-results = result
-time_testing.append((n,time.time()-time0))
+results = Parallel(n_jobs=njobs, temp_folder=temp_folder)(delayed(core_function)(not_extreme_samples, timesteps, i+5) for i in range(64))  
+# result = core_function(not_extreme_samples, timesteps, 5)
+# results = result
+# time_testing.append((n,time.time()-time0))
+print(time.time()-time0)
 
-# dumpfilename = r"R:\Scratch\305\_Robert\simulation_dump\results_random2.p"
-# dumpfile = open(dumpfilename, 'wb')
-# pickle.dump(results, dumpfile)
-# dumpfile.close()
+dumpfilename = r"R:\Scratch\305\_Robert\simulation_dump\results_grid.p"
+dumpfilename = r"R:\Scratch\305\_Robert\simulation_dump\results_WS140.p"
+dumpfile = open(dumpfilename, 'wb')
+pickle.dump(results, dumpfile)
+dumpfile.close()
