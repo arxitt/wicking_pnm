@@ -164,73 +164,76 @@ def core_simulation(r_i, lengths, adj_matrix, inlets, timesteps,  pnm_params, pe
     return new_time, new_V, V0, activation_time, filling_time, waiting_times
 
 def core_function(samples, timesteps, i, peak_fun=peak_fun, inlet_count = 2, diff_data=None, xs=xs, ys=ys, zs=zs):
-    prng3 = np.random.RandomState(i)
-    sample = prng3.choice(samples)
-    pnm_params = {
-           'data_path': r"A:\Robert_TOMCAT_3_netcdf4_archives\for_PNM",
-          # 'data_path': r"A:\Robert_TOMCAT_3_netcdf4_archives\processed_1200_dry_seg_aniso_sep",
-            'sample': sample,
-            # 'graph': nx.watts_strogatz_graph(n,8,0.1, seed=i+1),
-            'graph': nx.convert_node_labels_to_integers(nx.grid_graph([xs,ys,zs])),
-        # 'sample': 'T3_100_7_III',
-        # 'sample': 'T3_025_3_III',
-        # 'sample': 'T3_300_8_III',
-          'inlet_count': inlet_count,
-           'randomize_pore_data': True,
-          'seed': (i+3)**3
-    }
-
-    pnm = PNM(**pnm_params)
-    graph = pnm.graph.copy()
+    try:
+        prng3 = np.random.RandomState(i)
+        sample = prng3.choice(samples)
+        pnm_params = {
+               'data_path': r"A:\Robert_TOMCAT_3_netcdf4_archives\for_PNM",
+              # 'data_path': r"A:\Robert_TOMCAT_3_netcdf4_archives\processed_1200_dry_seg_aniso_sep",
+                # 'sample': sample,
+                # 'graph': nx.watts_strogatz_graph(n,8,0.1, seed=i+1),
+                'graph': nx.convert_node_labels_to_integers(nx.grid_graph([xs,ys,zs])),
+            # 'sample': 'T3_100_7_III',
+            'sample': 'T3_025_3_III',
+            # 'sample': 'T3_300_8_III',
+              'inlet_count': inlet_count,
+               'randomize_pore_data': True,
+              'seed': (i+3)**3
+        }
     
-    # FIXME: change R to increase influence of pore filling and decrease effect of waiting
-    R0 = 1#E17#4E15
-    
-    # inlets = pnm.inlets.copy()
-    inlets = np.arange(xs*ys)
-    
-    found_inlets = []
-    for inlet in inlets:
+        pnm = PNM(**pnm_params)
+        graph = pnm.graph.copy()
         
-        found_inlets.append(pnm.nodes[inlet])
-
-
-    v_inlets = -1*(np.arange(len(inlets))+1)
-    for k in range(len(inlets)):
-        graph.add_edge(found_inlets[k], v_inlets[k])
-    inlets = v_inlets
+        # FIXME: change R to increase influence of pore filling and decrease effect of waiting
+        R0 = 1#E17#4E15
+        
+        # inlets = pnm.inlets.copy()
+        inlets = np.arange(xs*ys)
+        
+        found_inlets = []
+        for inlet in inlets:
+            
+            found_inlets.append(pnm.nodes[inlet])
     
-    inlet_radii = np.zeros(len(inlets))
-    inlet_heights = np.zeros(len(inlets))  
     
-    # TO DO: if you choose r_i and volume indepently from distribution, it is possible
-    # to get infitive large pores --> change to aspect ratio or directly choose lengths
-    r_i = pnm.radi.copy()
-    # lengths = pnm.volumes.copy()/np.pi/r_i**2
-    lengths = pnm.heights.copy()
-    # lengths[:] = lengths.mean()
-    # r_i[:] = r_i.mean()
-    
-    r_i = np.concatenate([r_i, inlet_radii])
-    lengths = np.concatenate([lengths, inlet_heights])
-    adj_matrix = nx.to_numpy_array(graph)
-    
-    if diff_data is None:    
-        diff_data = pnm.pore_diff_data
-    
-    result_sim = core_simulation(r_i, lengths, adj_matrix, inlets, timesteps,  pnm_params, peak_fun, i, pnm, diff_data, R0=R0)
-    
-    # V0 = result_sim[2]
-    time = result_sim[0]
-    V = result_sim[1]
-    ref = np.argmax(V)
-    mean_flux = V[ref]/time[ref]
-    result_sim = result_sim + (mean_flux,)
-    result_sim = result_sim + (lengths,)
-    result_sim = result_sim + (r_i,)
-    result_sim = result_sim + (graph, )
-    
-    return result_sim
+        v_inlets = -1*(np.arange(len(inlets))+1)
+        for k in range(len(inlets)):
+            graph.add_edge(found_inlets[k], v_inlets[k])
+        inlets = v_inlets
+        
+        inlet_radii = np.zeros(len(inlets))
+        inlet_heights = np.zeros(len(inlets))  
+        
+        # TO DO: if you choose r_i and volume indepently from distribution, it is possible
+        # to get infitive large pores --> change to aspect ratio or directly choose lengths
+        r_i = pnm.radi.copy()
+        # lengths = pnm.volumes.copy()/np.pi/r_i**2
+        lengths = pnm.heights.copy()
+        # lengths[:] = lengths.mean()
+        # r_i[:] = r_i.mean()
+        
+        r_i = np.concatenate([r_i, inlet_radii])
+        lengths = np.concatenate([lengths, inlet_heights])
+        adj_matrix = nx.to_numpy_array(graph)
+        
+        if diff_data is None:    
+            diff_data = pnm.pore_diff_data
+        
+        result_sim = core_simulation(r_i, lengths, adj_matrix, inlets, timesteps,  pnm_params, peak_fun, i, pnm, diff_data, R0=R0)
+        
+        # V0 = result_sim[2]
+        time = result_sim[0]
+        V = result_sim[1]
+        ref = np.argmax(V)
+        mean_flux = V[ref]/time[ref]
+        result_sim = result_sim + (mean_flux,)
+        result_sim = result_sim + (lengths,)
+        result_sim = result_sim + (r_i,)
+        result_sim = result_sim + (graph, )
+        
+        return result_sim
+    except:
+        return None
 
 njobs = 16
 timesteps = int(5000000*n/120)#0#0#0
@@ -268,8 +271,8 @@ results = Parallel(n_jobs=njobs, temp_folder=temp_folder)(delayed(core_function)
 # time_testing.append((n,time.time()-time0))
 print(time.time()-time0)
 
-dumpfilename = r"R:\Scratch\305\_Robert\simulation_dump\results_grid.p"
-dumpfilename = r"R:\Scratch\305\_Robert\simulation_dump\results_WS140.p"
+dumpfilename = r"R:\Scratch\305\_Robert\simulation_dump\results_grid_T3_025_3_III.p"
+# dumpfilename = r"R:\Scratch\305\_Robert\simulation_dump\results_WS140.p"
 dumpfile = open(dumpfilename, 'wb')
 pickle.dump(results, dumpfile)
 dumpfile.close()
