@@ -28,9 +28,9 @@ import time
 
 time0 = time.time()
 
-xs = 5
-ys = 5
-zs = 6
+xs = 6
+ys = 6
+zs = 7
 n = xs*ys*zs
 n = 140
 
@@ -128,7 +128,10 @@ def from_ecdf(diff_data, n, seed=1):
 
     x_t, y_t = weighted_ecdf(diffs[mask].flatten(), weights[mask].flatten())
     
-    func = interp1d(y_t, x_t, fill_value = 'extrapolate')
+    
+    
+    # func = interp1d(y_t, x_t, fill_value = 'extrapolate')
+    func = interp1d(y_t, x_t, fill_value=(0,x_t.max()),bounds_error=False)
     prng2 = np.random.RandomState(seed)
     waiting_times = func(prng2.rand(n))
     
@@ -265,13 +268,13 @@ not_extreme_samples.remove('T3_025_9_III') #very little uptake --> v2,v3
 # not_extreme_samples.remove('T3_100_7') #very little uptake
 temp_folder = None
 temp_folder = r"Z:\users\firo\joblib_tmp"
-results = Parallel(n_jobs=njobs, temp_folder=temp_folder)(delayed(core_function)(not_extreme_samples, timesteps, i+5) for i in range(64))  
-# result = core_function(not_extreme_samples, timesteps, 5)
-# results = result
+# results = Parallel(n_jobs=njobs, temp_folder=temp_folder)(delayed(core_function)(not_extreme_samples, timesteps, i+5) for i in range(64))  
+result = core_function(not_extreme_samples, timesteps, 5)
+results = result
 # time_testing.append((n,time.time()-time0))
 print(time.time()-time0)
 
-dumpfilename = r"R:\Scratch\305\_Robert\simulation_dump\results_grid_T3_025_3_III.p"
+dumpfilename = r"R:\Scratch\305\_Robert\simulation_dump\results_grid_T3_025_3_III_6_6_7_wait_v2.p"
 # dumpfilename = r"R:\Scratch\305\_Robert\simulation_dump\results_WS140.p"
 dumpfile = open(dumpfilename, 'wb')
 pickle.dump(results, dumpfile)
