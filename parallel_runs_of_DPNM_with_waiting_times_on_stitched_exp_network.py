@@ -29,7 +29,7 @@ import pickle
 temp_folder = r"Z:\users\firo\joblib_tmp"
 # temp_folder = None
 
-levels = 5
+levels = 10
 
 # TODO: build random sample choice
 
@@ -204,10 +204,10 @@ def get_network_parameter(i, samples, inlet_count, return_pnm=False):
     pnm_params = {
            'data_path': r"A:\Robert_TOMCAT_3_netcdf4_archives\for_PNM",
           # 'data_path': r"A:\Robert_TOMCAT_3_netcdf4_archives\processed_1200_dry_seg_aniso_sep",
-            # 'sample': sample,
+            'sample': sample,
             # 'graph': nx.watts_strogatz_graph(400,8,0.1, seed=i+1),
         # 'sample': 'T3_100_7_III',
-        'sample': 'T3_025_3_III',
+     # +   'sample': 'T3_025_3_III',
         # 'sample': 'T3_300_8_III',
           'inlet_count': inlet_count,
            # 'randomize_pore_data': True,
@@ -376,7 +376,7 @@ print('Warning: diff data path is hard-coded!')
 print('Warning: Inlet resistance hard-coded')
 print('Warning: Waiting time distribution determined by first level only')
 # print('Warning peak number hard-coded to 1')
-njobs = 32
+njobs = 16
 timesteps = 5000000*levels#0#0#0
 
 # multi-sample run
@@ -405,14 +405,14 @@ not_extreme_samples.remove('T3_025_9_III') #very little uptake --> v2,v3
 # not_extreme_samples.remove('T3_300_4') #very little uptake
 # not_extreme_samples.remove('T3_100_7') #very little uptake
 
-# results = Parallel(n_jobs=njobs, temp_folder=temp_folder)(delayed(core_function)(not_extreme_samples, timesteps, i+5, levels=levels) for i in range(128))  
+results = Parallel(n_jobs=njobs, temp_folder=temp_folder)(delayed(core_function)(not_extreme_samples, timesteps, i+5, levels=levels) for i in range(32))  
 # results = Parallel(n_jobs=njobs)(delayed(core_function)(not_extreme_samples, timesteps, i, diff_data=[comb_diff_data, comb_weight_data]) for i in range(3*512))  
  
-result = core_function(not_extreme_samples, timesteps, 1, levels=levels)
-results = result
+# result = core_function(not_extreme_samples, timesteps, 1, levels=levels)
+# results = result
 
 
-dumpfilename = r"R:\Scratch\305\_Robert\simulation_dump\results_stitched.p"
+dumpfilename = r"R:\Scratch\305\_Robert\simulation_dump\results_stitched_10_level.p"
 dumpfile = open(dumpfilename, 'wb')
 pickle.dump(results, dumpfile)
 dumpfile.close()
