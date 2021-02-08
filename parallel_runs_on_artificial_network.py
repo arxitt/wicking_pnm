@@ -28,11 +28,11 @@ import time
 
 time0 = time.time()
 
-xs = 6
-ys = 6
-zs = 7
+xs = 8
+ys = 8
+zs = 9
 n = xs*ys*zs
-n = 140
+# n = 140
 
 ecdf = robpylib.CommonFunctions.Tools.weighted_ecdf
 
@@ -154,6 +154,7 @@ def core_simulation(r_i, lengths, adj_matrix, inlets, timesteps,  pnm_params, pe
     waiting_times = from_ecdf(diff_data, size, seed=i+1)
     waiting_times = extend_waiting_time(waiting_times, from_ecdf, peak_fun(prng.rand(size)), diff_data, i)
     
+    waiting_times = 0.1*waiting_times
     #  pass the pnm with the experimental activation time in the case of running the validation samples
     # time, V, V0, activation_time, filling_time = simulation(r_i, lengths, waiting_times, adj_matrix, inlets, timesteps, node_dict = pnm.label_dict, pnm = pnm, R0=R0,sample=pnm.sample)
     time, V, V0, activation_time, filling_time = simulation(r_i, lengths, waiting_times, adj_matrix, inlets, timesteps, node_dict = pnm.label_dict, R0=R0,sample=pnm.sample)
@@ -268,13 +269,13 @@ not_extreme_samples.remove('T3_025_9_III') #very little uptake --> v2,v3
 # not_extreme_samples.remove('T3_100_7') #very little uptake
 temp_folder = None
 temp_folder = r"Z:\users\firo\joblib_tmp"
-# results = Parallel(n_jobs=njobs, temp_folder=temp_folder)(delayed(core_function)(not_extreme_samples, timesteps, i+5) for i in range(64))  
-result = core_function(not_extreme_samples, timesteps, 5)
-results = result
+results = Parallel(n_jobs=njobs, temp_folder=temp_folder)(delayed(core_function)(not_extreme_samples, timesteps, i+5) for i in range(64))  
+# result = core_function(not_extreme_samples, timesteps, 5)
+# results = result
 # time_testing.append((n,time.time()-time0))
 print(time.time()-time0)
 
-dumpfilename = r"R:\Scratch\305\_Robert\simulation_dump\results_grid_T3_025_3_III_6_6_7_wait_v2.p"
+dumpfilename = r"R:\Scratch\305\_Robert\simulation_dump\results_grid_T3_025_3_III_8_8_9_wait_v2_10th.p"
 # dumpfilename = r"R:\Scratch\305\_Robert\simulation_dump\results_WS140.p"
 dumpfile = open(dumpfilename, 'wb')
 pickle.dump(results, dumpfile)
