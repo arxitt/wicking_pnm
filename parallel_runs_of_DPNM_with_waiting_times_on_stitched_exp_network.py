@@ -26,16 +26,16 @@ import os
 import robpylib
 import pickle
 
-temp_folder = r"Z:\users\firo\joblib_tmp"
-# temp_folder = None
+# temp_folder = r"Z:\users\firo\joblib_tmp"
+temp_folder = None
 
-levels = 10
+levels = 9
 
 # TODO: build random sample choice
 
 ecdf = robpylib.CommonFunctions.Tools.weighted_ecdf
 
-sourceFolder = r"A:\Robert_TOMCAT_3_netcdf4_archives\processed_1200_dry_seg_aniso_sep"
+sourceFolder = r"Z:\Robert_TOMCAT_3_netcdf4_archives\processed_1200_dry_seg_aniso_sep"
 
 #  extract distribution of peaks per pore
 peak_num = np.array([])
@@ -128,7 +128,8 @@ def from_ecdf(diff_data, n, seed=1):
 
     x_t, y_t = weighted_ecdf(diffs[mask].flatten(), weights[mask].flatten())
     
-    func = interp1d(y_t, x_t, fill_value = 'extrapolate')
+    # func = interp1d(y_t, x_t, fill_value = 'extrapolate')
+    func = interp1d(y_t, x_t, fill_value=(0,x_t.max()),bounds_error=False)
     prng2 = np.random.RandomState(seed)
     waiting_times = func(prng2.rand(n))
     
@@ -202,7 +203,7 @@ def get_network_parameter(i, samples, inlet_count, return_pnm=False):
     prng3 = np.random.RandomState(i)
     sample = prng3.choice(samples)
     pnm_params = {
-           'data_path': r"A:\Robert_TOMCAT_3_netcdf4_archives\for_PNM",
+           'data_path': r"Z:\Robert_TOMCAT_3_netcdf4_archives\for_PNM",
           # 'data_path': r"A:\Robert_TOMCAT_3_netcdf4_archives\processed_1200_dry_seg_aniso_sep",
             'sample': sample,
             # 'graph': nx.watts_strogatz_graph(400,8,0.1, seed=i+1),
@@ -412,7 +413,7 @@ results = Parallel(n_jobs=njobs, temp_folder=temp_folder)(delayed(core_function)
 # results = result
 
 
-dumpfilename = r"R:\Scratch\305\_Robert\simulation_dump\results_stitched_10_level.p"
+dumpfilename = r"R:\Scratch\305\_Robert\simulation_dump\results_stitched_9_level_wait_v2.p"
 dumpfile = open(dumpfilename, 'wb')
 pickle.dump(results, dumpfile)
 dumpfile.close()

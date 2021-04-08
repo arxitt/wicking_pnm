@@ -275,7 +275,7 @@ results = Parallel(n_jobs=njobs, temp_folder=temp_folder)(delayed(core_function)
 # time_testing.append((n,time.time()-time0))
 print(time.time()-time0)
 
-dumpfilename = r"R:\Scratch\305\_Robert\simulation_dump\results_grid_T3_025_3_III_8_8_9_wait_v2_10th.p"
+dumpfilename = r"R:\Scratch\305\_Robert\simulation_dump\results_grid_T3_025_3_III_8_8_9_wait_v2.p"
 # dumpfilename = r"R:\Scratch\305\_Robert\simulation_dump\results_WS140.p"
 dumpfile = open(dumpfilename, 'wb')
 pickle.dump(results, dumpfile)
