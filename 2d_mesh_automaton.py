@@ -14,62 +14,75 @@ import numpy as np
 from skimage.morphology import square
 
 patm = 101.325E3 #Pa
-pc = 1E5 #TODO: get reasonable value
 g = 9.81 #m/s2
 rho = 1000 #kg/m3
-grid_size = 1E-3 #m
+grid_size = 3-5 #m
+eta = 1E-5 #Pas
+gamma = 72E-3 #N/m
 
-domain_size = (10, 10)
 
-def solve_pressure_field(p, rest, masked, acts, inlets, K_mat, pg):
+# experimental input
+h0 = 25E-3 #m, maximum height
+C = 1.1E-3 #m/sqrt(s), wicking constant
+
+r = 5E-3
+K0 = np.pi*r**4/8/eta/grid_size
+pc0 = 2*gamma/r
+# pc0 = h0*rho*g
+
+domain_size = (80, 20)
+
+def solve_pressure_field(p, mask, acts, inlets, K_mat, pg, pc):
     # define RHS (boundary conditions)
-    p[:]= pg  #TODO: add gravity
-    p[acts] = pc[acts] + patm  #TODO: add perturbation and front shape effect
-    p[inlets] = patm 
-    
-    # p = p + pg
+    #  check signs of pressures
+    p[:]= 0  
+    p[mask] = -pg[mask]
+    p[acts] = p[acts] - pc[acts] + patm  #TODO: add perturbation 
+    p[inlets] = p[inlets] + patm 
     
     # define conductance (K_mat) and LHS (A) matrix
 
     A = - K_mat.copy()
-    A[rest, :] = 0
-    A[:, rest] = 0
+    A[~mask, :] = 0
+    A[:, ~mask] = 0
     np.fill_diagonal(A, -A.sum(axis=0))
      
     A[inlets,:] = 0
     A[inlets,inlets] = 1
      
-    for i in acts[0]:
+    for i in acts:
          A[i,:] = 0
          A[i,i] = 1  
      
-    A = A[masked,:]
-    A = A[:,masked] 
+    A = A[mask,:]
+    A = A[:,mask] 
       
     # solve equation system for pressure field
-    p[masked] = np.linalg.solve(A, p[masked])            
+    p[mask] = np.linalg.solve(A, p[mask])#- pg[mask]         
     p_mat = p-p[:,None]
        
     # get pore fluxes
-    q_ij = K_mat*p_mat
+    q_ij = -K_mat*p_mat
     q_i = q_ij.sum(axis=0)
     
     return q_i
 
 # store filling state in numpy array v>=1:filled, 0:empty, 0<v<1 active
 # dump this state to 3D array every once in a while -> result
-# exctract actives and filled from this array and apply Laplace filter on it to get wetting force multiplicator at finger tips
-#find good look up method for pore element coordinates from node indices (needed for gravity and update of filling array)
+# DONE: exctract actives and filled from this array and apply Laplace filter on it to get wetting force multiplicator at finger tips
+# DONE: find good look up method for pore element coordinates from node indices (needed for gravity and update of filling array)
 # include fiber orientation as non-isotropic weighting factor for wetting force
-#  initializ with 2 filled rows, cinsider high resistzance between these rows to stabilize simulation
 #  consider adding diagonal conductivity
+#  estimate capillary pressure pc0 and conductivity from experiment
+#  DONE: consider calculating conductivityx using filling state to better reflect disztance effect of dissipation
+# include local drainage
 
 
 def front_extraction(fill_mat):
     dilated = sp.ndimage.binary_dilation(fill_mat, structure=square(3))
     front = np.bitwise_xor(dilated, fill_mat)
     acts = np.where(front)
-    return acts, dilated
+    return acts, np.uint8(dilated)
 
 def unravel_coordinate(node_index, fill_mat):
     coord = np.unravel_index(node_index, fill_mat.shape)
@@ -79,23 +92,109 @@ def ravel_index(coord, fill_mat):
     index = np.ravel_multi_index(coord, fill_mat.shape)
     return index
 
-def front_pressure(acts, dilated, pc0=pc):
-    laplace = sp.ndimage.gaussian_laplace(dilated.astype(np.uint16), sigma=0.5)
-    # laplace = sp.ndimage.laplace(dilated)
+def front_pressure(acts, dilated, pc0=pc0):
+    laplace = sp.ndimage.laplace(dilated)
     pc = pc0*laplace[acts]
     return pc
 
-def get_node_gravity(node_index, fill_mat, rho=rho, g=g, grid_size=grid_size):
+def get_node_gravity(node_index, fill_mat, V=1, rho=rho, g=g, grid_size=grid_size):
     coord = unravel_coordinate(node_index, fill_mat)
-    y = coord[1]*grid_size
+    y = (coord[0]-1+V)*grid_size
     pg = rho*g*y
     return pg
 
+def init_K(acts, fills, K0, adj_matrix, K, Vi):
+    # K = K_full.copy()
+    K[:] = 0
+    K[fills] = K0
+    K[acts] = K0/Vi[acts]
+    K_mat = 1/(1/K + 1/K[:,None])
+    
+    for i in acts:
+        for j in acts:
+            K_mat[i,j] = 0
+    
+    K_mat = K_mat*(adj_matrix)
+    return K_mat
 #  initialize
 
 fill_mat = np.zeros(domain_size, dtype = np.bool)
 fill_mat[:2,:] = True
-inlets = np.arange(domain_size[0])
+
+result_t_size = 1500
+result_array = np.zeros((domain_size[0], domain_size[1], result_t_size), dtype = np.bool)
+result_time = np.zeros(result_t_size)
+result_V = result_time.copy()
+result_V[:] =np.nan
+
+inlets = np.arange(domain_size[1])
 
 pg = get_node_gravity(np.arange(domain_size[0]*domain_size[1]), fill_mat)
+
+noise = 0.1
+pc = pc0*(np.ones(len(pg))-noise*(-0.5+np.random.rand(len(pg))))
+p = np.zeros(len(pg))
+
+graph = nx.grid_2d_graph(domain_size[0], domain_size[1])
+adj_matrix = nx.to_numpy_array(graph)
+
+Vi = np.zeros(len(pg))
+mask = np.zeros(len(pg), dtype=np.bool)
+filled = mask.copy()
+filled[ravel_index(np.where(fill_mat), fill_mat)] = True
+
+Vi[filled] = 1
+mask[filled] = True
+
+acts, dilated = front_extraction(fill_mat)
+act_ind = ravel_index(acts, fill_mat)
+mask[act_ind] = True
+
+dt = 100000
+time = 0
+
+K = np.zeros(len(pg))
+
+last_iteration = -1
+ti = 0
+for t in range(result_t_size*10): 
+    if len(act_ind) == 0:
+        last_iteration = ti
+        break
+    # K_mat = K_mat 
     
+    pc[act_ind] = front_pressure(acts, dilated)
+    pg[act_ind] = get_node_gravity(act_ind, fill_mat, V=Vi[act_ind])
+    
+    K_mat = init_K(act_ind, filled, K0, adj_matrix, K, Vi)
+    q_i = solve_pressure_field(p, mask, act_ind, inlets, K_mat, pg, pc)
+    
+    dt = 0.05/q_i[act_ind].max()
+    
+    if dt<0:
+        dt = np.abs(dt)
+    
+    Vi[act_ind] = Vi[act_ind]  + dt*q_i[act_ind] #TODO get correct element size matching with conductivity, resolution etc
+    filled[Vi>0.98] = True
+    Vi[Vi<0] = 0
+    time = time + dt
+    if np.any(filled[act_ind]):
+        new_filled = act_ind[filled[act_ind]]
+        fill_mat[unravel_coordinate(new_filled, fill_mat)] = True
+        acts, dilated = front_extraction(fill_mat)
+        act_ind = ravel_index(acts, fill_mat)
+        mask[act_ind] = True
+
+    
+    if t%10 == 0:
+        # print(q_i[act_ind].max())
+        # # print(act_ind)
+        # print(unravel_coordinate(act_ind, fill_mat))
+        # print(np.array(graph.nodes)[act_ind])
+        result_array[:,:,ti] = fill_mat
+        result_time[ti] = time
+        result_V[ti] = Vi.sum()
+        ti = ti+1
+    
+# # TODO:maybe  add diagonal links with weight 1/sqrt(2)
+
