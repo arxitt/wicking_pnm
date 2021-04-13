@@ -25,7 +25,7 @@ gamma = 72E-3 #N/m
 h0 = 25E-3 #m, maximum height
 C = 1.1E-3 #m/sqrt(s), wicking constant
 
-r = 5E-3
+r = 5E-4
 K0 = np.pi*r**4/8/eta/grid_size
 pc0 = 2*gamma/r
 # pc0 = h0*rho*g
@@ -40,7 +40,7 @@ def solve_pressure_field(p, mask, acts, inlets, K_mat, pg, pc):
     # TODO: always check signs of pressures
     p[:]= 0  
     p[mask] = -pg[mask]
-    p[acts] = p[acts] - pc[acts] + patm  #TODO: add perturbation 
+    p[acts] = p[acts] + pc[acts] + patm  #TODO: add perturbation 
     p[inlets] = p[inlets] + patm 
     
     # define conductance (K_mat) and LHS (A) matrix
@@ -65,7 +65,7 @@ def solve_pressure_field(p, mask, acts, inlets, K_mat, pg, pc):
     p_mat = p-p[:,None]
        
     # get pore fluxes
-    q_ij = -K_mat*p_mat
+    q_ij = K_mat*p_mat
     q_i = q_ij.sum(axis=0)
     
     return q_i, p
@@ -96,14 +96,14 @@ def ravel_index(coord, fill_mat):
     return index
 
 def front_pressure(acts, dilated, pc0=pc0):
-    laplace = sp.ndimage.laplace(dilated)
-    pc = pc0*(-laplace[acts])
+    # laplace = sp.ndimage.laplace(dilated)
+    pc = pc0#*(-laplace[acts])
     return pc
 
 def get_node_gravity(node_index, fill_mat, V=1, rho=rho, g=g, grid_size=grid_size):
     coord = unravel_coordinate(node_index, fill_mat)
     y = (coord[0]-1+V)*grid_size
-    pg = rho*g*y
+    pg = rho*g*y*0
     return pg
 
 def init_K(acts, fills, K0, adj_matrix, K, Vi):
@@ -126,7 +126,7 @@ fill_mat[:2,:] = True
 # fill_mat[:58,10] = True
 V_mat = np.zeros(domain_size, dtype = np.float32)
 
-result_t_size = 1500
+result_t_size = 800
 result_array = np.zeros((domain_size[0], domain_size[1], result_t_size), dtype = np.bool)
 result_pressure = np.zeros((domain_size[0], domain_size[1], result_t_size), dtype = np.float32)
 result_time = np.zeros(result_t_size)
@@ -137,7 +137,7 @@ inlets = np.arange(domain_size[1])
 
 pg = get_node_gravity(np.arange(domain_size[0]*domain_size[1]), fill_mat)
 
-noise = 0.5
+noise = 0#.25
 pc = pc0*(np.ones(len(pg))+noise*(-0.5+np.random.rand(len(pg))))
 pc0 = pc.copy()
 p = np.zeros(len(pg))
@@ -170,8 +170,8 @@ for t in range(result_t_size*10):
         last_iteration = ti
         break
     # K_mat = K_mat 
-    # pc[act_ind] = front_pressure(acts, V_mat, pc0=pc0[act_ind])
-    pc[act_ind] = front_pressure(acts, dilated*1, pc0=pc0[act_ind])
+    pc[act_ind] = front_pressure(acts, V_mat, pc0=pc0[act_ind])
+    # pc[act_ind] = front_pressure(acts, dilated*1, pc0=pc0[act_ind])
     pg[act_ind] = get_node_gravity(act_ind, fill_mat, V=Vi[act_ind])
     
     K_mat = init_K(act_ind, filled, K0, adj_matrix, K, Vi)
