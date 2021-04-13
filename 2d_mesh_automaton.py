@@ -16,7 +16,7 @@ from skimage.morphology import square
 patm = 101.325E3 #Pa
 g = 9.81 #m/s2
 rho = 1000 #kg/m3
-grid_size = 1E-3 #m
+grid_size = 0.5E-3 #m
 eta = 1E-5 #Pas
 gamma = 72E-3 #N/m
 
@@ -28,12 +28,12 @@ C = 1.1E-3 #m/sqrt(s), wicking constant
 b = 30E-6 #m, approximate membrane thickness
 
 r = 1E-4 #m
-# K0 = np.pi*r**4/8/eta/grid_size
-K0 = 2*h0*C**2
-# pc0 = 2*gamma/r
-pc0 = h0*rho*g
+K0 = np.pi*r**4/8/eta/grid_size
+# K0 = 2*h0*C**2
+pc0 = 2*gamma/r
+# pc0 = h0*rho*g
 
-domain_size = (70, 40)
+domain_size = (80, 60)
 
 
 def solve_pressure_field(p, mask, acts, inlets, K_mat, pg, pc):
@@ -148,7 +148,7 @@ inlets = np.arange(domain_size[1])
 
 pg = get_node_gravity(np.arange(domain_size[0]*domain_size[1]), fill_mat)
 
-noise = 0.05
+noise = 0.1
 pc = pc0*(np.ones(len(pg))+noise*(-0.5+np.random.rand(len(pg))))
 pc0 = pc.copy()
 p = np.zeros(len(pg))
