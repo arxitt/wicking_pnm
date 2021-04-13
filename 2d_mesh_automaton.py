@@ -16,7 +16,7 @@ from skimage.morphology import square
 patm = 101.325E3 #Pa
 g = 9.81 #m/s2
 rho = 1000 #kg/m3
-grid_size = 1E-4 #m
+grid_size = 1E-3 #m
 eta = 1E-5 #Pas
 gamma = 72E-3 #N/m
 
@@ -39,8 +39,8 @@ def solve_pressure_field(p, mask, acts, inlets, K_mat, pg, pc):
     # define RHS (boundary conditions)
     # TODO: always check signs of pressures
     p[:]= 0  
-    p[mask] = -pg[mask]
-    p[acts] = p[acts] + pc[acts] + patm  #TODO: add perturbation 
+    # p[mask] = pg[mask]
+    p[acts] = p[acts] - pc[acts] + patm  #TODO: add perturbation 
     p[inlets] = p[inlets] + patm 
     
     # define conductance (K_mat) and LHS (A) matrix
@@ -61,11 +61,11 @@ def solve_pressure_field(p, mask, acts, inlets, K_mat, pg, pc):
     A = A[:,mask] 
       
     # solve equation system for pressure field
-    p[mask] = np.linalg.solve(A, p[mask])#- pg[mask]         
+    p[mask] = np.linalg.solve(A, p[mask])- pg[mask]         
     p_mat = p-p[:,None]
        
     # get pore fluxes
-    q_ij = K_mat*p_mat
+    q_ij = -K_mat*p_mat
     q_i = q_ij.sum(axis=0)
     
     return q_i, p
@@ -106,7 +106,7 @@ def front_pressure(acts, dilated, pc0=pc0, binary_flag=True):
 def get_node_gravity(node_index, fill_mat, V=1, rho=rho, g=g, grid_size=grid_size):
     coord = unravel_coordinate(node_index, fill_mat)
     y = (coord[0]-1+V)*grid_size
-    pg = rho*g*y*0
+    pg = rho*g*y
     return pg
 
 def init_K(acts, fills, K0, adj_matrix, K, Vi):
