@@ -95,9 +95,12 @@ def ravel_index(coord, fill_mat):
     index = np.ravel_multi_index(coord, fill_mat.shape)
     return index
 
-def front_pressure(acts, dilated, pc0=pc0):
-    # laplace = sp.ndimage.laplace(dilated)
-    pc = pc0#*(-laplace[acts])
+def front_pressure(acts, dilated, pc0=pc0, binary_flag=True):
+    laplace = sp.ndimage.laplace(dilated)
+    if binary_flag:
+        pc = pc0*(-laplace[acts])
+    else:
+        pc = pc0*(2-laplace[acts])
     return pc
 
 def get_node_gravity(node_index, fill_mat, V=1, rho=rho, g=g, grid_size=grid_size):
@@ -170,8 +173,10 @@ for t in range(result_t_size*10):
         last_iteration = ti
         break
     # K_mat = K_mat 
-    pc[act_ind] = front_pressure(acts, V_mat, pc0=pc0[act_ind])
-    # pc[act_ind] = front_pressure(acts, dilated*1, pc0=pc0[act_ind])
+    # pc[act_ind] = front_pressure(acts, V_mat, pc0=pc0[act_ind], binary_flag = False)
+    
+    # 
+    pc[act_ind] = front_pressure(acts, dilated*1, pc0=pc0[act_ind])
     pg[act_ind] = get_node_gravity(act_ind, fill_mat, V=Vi[act_ind])
     
     K_mat = init_K(act_ind, filled, K0, adj_matrix, K, Vi)
