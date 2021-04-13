@@ -25,10 +25,13 @@ gamma = 72E-3 #N/m
 h0 = 25E-3 #m, maximum height
 C = 1.1E-3 #m/sqrt(s), wicking constant
 
+b = 30E-6 #m, approximate membrane thickness
+
 r = 1E-4 #m
-K0 = np.pi*r**4/8/eta/grid_size
-pc0 = 2*gamma/r
-# pc0 = h0*rho*g
+# K0 = np.pi*r**4/8/eta/grid_size
+K0 = 2*h0*C**2
+# pc0 = 2*gamma/r
+pc0 = h0*rho*g
 
 domain_size = (70, 40)
 
