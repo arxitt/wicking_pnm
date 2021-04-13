@@ -25,12 +25,12 @@ gamma = 72E-3 #N/m
 h0 = 25E-3 #m, maximum height
 C = 1.1E-3 #m/sqrt(s), wicking constant
 
-r = 5E-4
+r = 1E-4 #m
 K0 = np.pi*r**4/8/eta/grid_size
 pc0 = 2*gamma/r
 # pc0 = h0*rho*g
 
-domain_size = (80, 15)
+domain_size = (70, 40)
 
 
 def solve_pressure_field(p, mask, acts, inlets, K_mat, pg, pc):
@@ -95,10 +95,15 @@ def ravel_index(coord, fill_mat):
     index = np.ravel_multi_index(coord, fill_mat.shape)
     return index
 
-def front_pressure(acts, dilated, pc0=pc0, binary_flag=True):
+def front_pressure(acts, dilated, Vi = 1, pc0=pc0, binary_flag=True):
     laplace = sp.ndimage.laplace(dilated)
     if binary_flag:
-        pc = pc0*(-laplace[acts])
+        shape_factor = -laplace[acts]-1
+        shape_factor = Vi*shape_factor
+        shape_factor[shape_factor<0] = 0
+        pc = pc0*(1+shape_factor)
+        # pc = pc0*(1 - 1/laplace[acts])
+        # pc = pc0#*(-laplace[acts])
     else:
         pc = pc0*(2-laplace[acts])
     return pc
@@ -140,7 +145,7 @@ inlets = np.arange(domain_size[1])
 
 pg = get_node_gravity(np.arange(domain_size[0]*domain_size[1]), fill_mat)
 
-noise = 0#.25
+noise = 0.05
 pc = pc0*(np.ones(len(pg))+noise*(-0.5+np.random.rand(len(pg))))
 pc0 = pc.copy()
 p = np.zeros(len(pg))
@@ -176,14 +181,16 @@ for t in range(result_t_size*10):
     # pc[act_ind] = front_pressure(acts, V_mat, pc0=pc0[act_ind], binary_flag = False)
     
     # 
-    pc[act_ind] = front_pressure(acts, dilated*1, pc0=pc0[act_ind])
+    pc[act_ind] = front_pressure(acts, dilated*1, Vi=Vi[act_ind], pc0=pc0[act_ind])
     pg[act_ind] = get_node_gravity(act_ind, fill_mat, V=Vi[act_ind])
     
     K_mat = init_K(act_ind, filled, K0, adj_matrix, K, Vi)
     q_i, p = solve_pressure_field(p, mask, act_ind, inlets, K_mat, pg, pc)
-    
+
     dt = 0.05/q_i[act_ind].max()
-    
+    if not np.any(dt*q_i>0.0001):
+        last_iteration = ti
+        break    
     if dt<0:
         dt = np.abs(dt)
     
