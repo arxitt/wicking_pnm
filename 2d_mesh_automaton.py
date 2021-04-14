@@ -64,7 +64,8 @@ def solve_pressure_field(p, mask, acts, inlets, K_mat, pg, pc):
     A = A[:,mask] 
       
     # solve equation system for pressure field
-    p[mask] = np.linalg.solve(A, p[mask])- pg[mask]         
+    p[mask] = np.linalg.solve(A, p[mask])- pg[mask]
+    # p[acts][p[acts]<0] = 0
     p_mat = p-p[:,None]
        
     # get pore fluxes
@@ -200,6 +201,8 @@ for t in range(result_t_size*10):
     
     Vi[act_ind] = Vi[act_ind]  + dt*q_i[act_ind] #TODO get correct element size matching with conductivity, resolution etc
     filled[Vi>0.98] = True
+    filled[Vi<0] = False
+    fill_mat = filled.reshape(V_mat.shape)
     Vi[Vi<0] = 0
     V_mat = Vi.reshape(V_mat.shape)
     time = time + dt
