@@ -28,12 +28,12 @@ C = 1.1E-3 #m/sqrt(s), wicking constant
 b = 30E-6 #m, approximate membrane thickness
 
 r = 1E-4 #m
-K0 = np.pi*r**4/8/eta/grid_size
-# K0 = 2*h0*C**2
-pc0 = 2*gamma/r
-# pc0 = h0*rho*g
+# K0 = np.pi*r**4/8/eta/grid_size
+K0 = 2*h0*C**2/grid_size
+# pc0 = 2*gamma/r
+pc0 = h0*rho*g
 
-domain_size = (80, 60)
+domain_size = (100, 60)
 
 
 def solve_pressure_field(p, mask, acts, inlets, K_mat, pg, pc):
@@ -148,7 +148,7 @@ inlets = np.arange(domain_size[1])
 
 pg = get_node_gravity(np.arange(domain_size[0]*domain_size[1]), fill_mat)
 
-noise = 0.1
+noise = 0.15
 pc = pc0*(np.ones(len(pg))+noise*(-0.5+np.random.rand(len(pg))))
 pc0 = pc.copy()
 p = np.zeros(len(pg))
@@ -184,7 +184,8 @@ for t in range(result_t_size*10):
     # pc[act_ind] = front_pressure(acts, V_mat, pc0=pc0[act_ind], binary_flag = False)
     
     # 
-    pc[act_ind] = front_pressure(acts, dilated*1, Vi=Vi[act_ind], pc0=pc0[act_ind])
+    # pc[act_ind] = front_pressure(acts, dilated*1, Vi=Vi[act_ind], pc0=pc0[act_ind])
+    pc[act_ind] = front_pressure(acts, dilated*1, pc0=pc0[act_ind])
     pg[act_ind] = get_node_gravity(act_ind, fill_mat, V=Vi[act_ind])
     
     K_mat = init_K(act_ind, filled, K0, adj_matrix, K, Vi)
