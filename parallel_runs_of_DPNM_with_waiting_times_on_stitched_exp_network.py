@@ -29,7 +29,7 @@ import pickle
 # temp_folder = r"Z:\users\firo\joblib_tmp"
 temp_folder = None
 
-levels = 9
+levels = 10
 
 # TODO: build random sample choice
 
@@ -413,7 +413,7 @@ results = Parallel(n_jobs=njobs, temp_folder=temp_folder)(delayed(core_function)
 # results = result
 
 
-dumpfilename = r"R:\Scratch\305\_Robert\simulation_dump\results_stitched_9_level_wait_v2.p"
+dumpfilename = r"R:\Scratch\305\_Robert\simulation_dump\results_stitched_10_level_wait_v2.p"
 dumpfile = open(dumpfilename, 'wb')
 pickle.dump(results, dumpfile)
 dumpfile.close()
