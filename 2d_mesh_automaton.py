@@ -26,7 +26,7 @@ h0 = 25E-3 #m, maximum height
 C = 1.1E-3 #m/sqrt(s), wicking constant
 
 b = 30E-6 #m, approximate membrane thickness
-SF = 0.1 #surface factor that describes how much the water-air interface decreases when the surface film dissappears
+SF = 0.01 #surface factor that describes how much the water-air interface decreases when the surface film dissappears
 
 pA = 2*gamma/b*SF
 
@@ -41,7 +41,7 @@ K0 = 2*h0*C**2/grid_size
 # pc0 = 2*gamma/r
 pc0 = h0*rho*g
 
-domain_size = (100, 60)
+domain_size = (90, 30)
 
 def get_fluxes(K_mat, p):
     # calculate pressure differences
@@ -171,17 +171,17 @@ result_V[:] =np.nan
 inlets = np.arange(domain_size[1])
 
 pg = get_node_gravity(np.arange(domain_size[0]*domain_size[1]), fill_mat)
-pg[0.97*pg>pc0]
+pg[0.98*pg>pc0] = pg[0.98*pg>pc0]+pA
 
-noise = 0.15
-pc = pc0*(np.ones(len(pg))+noise*(-0.5+np.random.rand(len(pg))))
+noise = 0.005
+pc = pc0*(np.ones(len(pg))+noise*np.random.randn(len(pg)))
 pc0 = pc.copy()
 
 pg = get_node_gravity(np.arange(domain_size[0]*domain_size[1]), fill_mat)
 
 # effect of surface film dissappearance at critical height
 # keep an eye on this implementation, might have to be dynamic
-pc0[0.97*pg>pc0] = pc0+pA
+pc0[0.97*pg>pc0] = pc0[0.97*pg>pc0]+pA
 
 p = np.zeros(len(pg))
 
