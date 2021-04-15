@@ -35,6 +35,19 @@ pc0 = h0*rho*g
 
 domain_size = (100, 60)
 
+def get_fluxes(K_mat, p):
+    # calculate pressure differences
+    p_mat = p-p[:,None]
+    # get pore fluxes
+    q_ij = -K_mat*p_mat
+    q_i = q_ij.sum(axis=0)
+    return q_i
+
+def solve_pressure_field_v2():
+    #TODO: improve performance of tracing filling state and setting up the equation system, the solver is already very fast
+    p = 1
+    return p
+        
 
 def solve_pressure_field(p, mask, acts, inlets, K_mat, pg, pc):
     # TODO: solver is not the problem, get rid of copy by calculculating fluxes outside
