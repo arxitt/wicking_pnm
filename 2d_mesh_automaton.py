@@ -26,7 +26,7 @@ h0 = 25E-3 #m, maximum height
 C = 1.1E-3 #m/sqrt(s), wicking constant
 
 b = 30E-6 #m, approximate membrane thickness
-SF = 0.1 #surface factor, that describes how much the water-air interface decreases when the surface film dissappears
+SF = 0.1 #surface factor that describes how much the water-air interface decreases when the surface film dissappears
 
 pA = 2*gamma/b*SF
 
@@ -178,6 +178,9 @@ pc = pc0*(np.ones(len(pg))+noise*(-0.5+np.random.rand(len(pg))))
 pc0 = pc.copy()
 
 pg = get_node_gravity(np.arange(domain_size[0]*domain_size[1]), fill_mat)
+
+# effect of surface film dissappearance at critical height
+# keep an eye on this implementation, might have to be dynamic
 pc0[0.97*pg>pc0] = pc0+pA
 
 p = np.zeros(len(pg))
