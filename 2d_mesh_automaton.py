@@ -94,8 +94,10 @@ def solve_pressure_field(p, mask, acts, inlets, K_mat, pg, pc):
 # include fiber orientation as non-isotropic weighting factor for wetting force
 #  consider adding diagonal conductivity
 #  estimate capillary pressure pc0 and conductivity from experiment
-#  DONE: consider calculating conductivityx using filling state to better reflect disztance effect of dissipation
-# include local drainage
+#  TRIED and REMoVED again: consider calculating conductivityx using filling state to better reflect disztance effect of dissipation
+# include local drainage, probably not needed
+# consider pc increase due to disappearance of surface film.
+
 
 
 def front_extraction(fill_mat):
