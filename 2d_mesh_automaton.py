@@ -26,6 +26,14 @@ h0 = 25E-3 #m, maximum height
 C = 1.1E-3 #m/sqrt(s), wicking constant
 
 b = 30E-6 #m, approximate membrane thickness
+SF = 0.1 #surface factor, that describes how much the water-air interface decreases when the surface film dissappears
+
+pA = 2*gamma/b*SF
+
+# p = dF/dV =
+# dF = gamma dA
+#  dA = grid_size*dz
+#  dV = grid_size*b*dz
 
 r = 1E-4 #m
 # K0 = np.pi*r**4/8/eta/grid_size
@@ -163,10 +171,15 @@ result_V[:] =np.nan
 inlets = np.arange(domain_size[1])
 
 pg = get_node_gravity(np.arange(domain_size[0]*domain_size[1]), fill_mat)
+pg[0.97*pg>pc0]
 
 noise = 0.15
 pc = pc0*(np.ones(len(pg))+noise*(-0.5+np.random.rand(len(pg))))
 pc0 = pc.copy()
+
+pg = get_node_gravity(np.arange(domain_size[0]*domain_size[1]), fill_mat)
+pc0[0.97*pg>pc0] = pc0+pA
+
 p = np.zeros(len(pg))
 
 graph = nx.grid_2d_graph(domain_size[0], domain_size[1])
