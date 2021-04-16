@@ -197,6 +197,32 @@ def generate_combined_waiting_times(diff_data, size,peak_fun, i):
             waiting_times[i] = waiting_times[i] + func(prng3.rand())
     return waiting_times
 
+def DT(beta):
+    DT = 4/beta
+    return DT
+
+def calibrate_waiting_time(waiting_times, data,seed=1000, cut_off = 1000):
+    dt = DT(data['sig_fit_data'].sel(sig_fit_var = 'beta [1_s]').data)
+    dt = dt[dt<cut_off]
+    x,y = robpylib.CommonFunctions.Tools.weighted_ecdf(dt)
+    func = interp1d(y, x, fill_value = 'extrapolate')
+    
+    prng = np.random.RandomState(seed)
+    correction = func(prng.rand(waiting_times.size))
+    waiting_times = waiting_times - correction
+    waiting_times[waiting_times<0] = 0
+    
+    return waiting_times
+
+def calibrate_waiting_time_theoretic(waiting_times, r_i, lengths, R0, cos = np.cos(48/180*np.pi), gamma = 72E-3):
+    # pc = RQ = R dV/dt = R pi r**2*l/dt
+    pc = 2*gamma*cos/r_i
+    dt = R0*np.pi*r_i**2*lengths/pc
+    waiting_times = waiting_times-dt
+    waiting_times[waiting_times<0] = 0
+    return waiting_times
+    
+
 def core_simulation(r_i, lengths, adj_matrix, inlets, timesteps,  pnm_params, peak_fun, i, pnm, diff_data, R0=1):
     size = len(r_i)
 
@@ -206,6 +232,8 @@ def core_simulation(r_i, lengths, adj_matrix, inlets, timesteps,  pnm_params, pe
         prng = np.random.RandomState(i)
         waiting_times = from_ecdf(diff_data, size, seed=i+1)
         waiting_times = extend_waiting_time(waiting_times, from_ecdf, peak_fun(prng.rand(size)), diff_data, i)
+        waiting_times = calibrate_waiting_time(waiting_times, pnm.data, seed = i+1000)
+        # waiting_times = calibrate_waiting_time_theoretic(waiting_times, r_i, lengths, R0)
     
     #  pass the pnm with the experimental activation time in the case of running the validation samples
     # time, V, V0, activation_time, filling_time = simulation(r_i, lengths, waiting_times, adj_matrix, inlets, timesteps, node_dict = pnm.label_dict, pnm = pnm, R0=R0,sample=pnm.sample)
@@ -237,7 +265,7 @@ def core_function(samples, timesteps, i, peak_fun=peak_fun, inlet_count = 2, dif
 
     pnm = PNM(**pnm_params)
     graph = pnm.graph.copy()
-    R0 = 1#E17#4E15
+    R0 = 0.5E17#4E15
     # print('inlet R '+str(R0))
     
     # ####fixed inlets for validation samples##############
@@ -366,7 +394,7 @@ results = Parallel(n_jobs=njobs, temp_folder=temp_folder)(delayed(core_function)
  
 # result = core_function(not_extreme_samples, timesteps, 1)
 
-dumpfilename = r"R:\Scratch\305\_Robert\simulation_dump\results_random_wait_v2.p"
+dumpfilename = r"R:\Scratch\305\_Robert\simulation_dump\results_random_wait_v3_calibrated_waiting_times.p"
 dumpfile = open(dumpfilename, 'wb')
 pickle.dump(results, dumpfile)
 dumpfile.close()

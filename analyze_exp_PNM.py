@@ -119,4 +119,3 @@ for result in results:
     weighted_edge_wait[cc] = np.average(edge_wait, weights=edge_centrality**3)
     mean_wait[cc] = edge_wait.mean()
     cc += 1
-    ♦
