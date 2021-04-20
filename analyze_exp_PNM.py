@@ -35,15 +35,27 @@ paper_samples = [
     'T3_300_9_III'
 ]
 
-not_extreme_samples = paper_samples
+samples_3b = ['T3_025_10_IV',
+ 'T3_025_3_IV',
+ 'T3_025_6_IV',
+ 'T3_025_9_IV',
+ 'T3_100_07_IV',
+ 'T3_100_08_IV',
+ 'T3_100_10_IV',
+ 'T3_300_13_IV',
+ 'T3_300_15_IV',
+ 'T3_300_9_IV']
+
+not_extreme_samples = paper_samples+ samples_3b
 # not_extreme_samples.remove('T3_100_1') #processing artefacts from moving sample
 # not_extreme_samples.remove('T3_025_4') #very little uptake --> v3
 not_extreme_samples.remove('T3_025_9_III') #very little uptake --> v2,v3
 
 def function(sample):
     pnm_params = {
-            'data_path': r"Z:\Robert_TOMCAT_3_netcdf4_archives\for_PNM",
+            # 'data_path': r"Z:\Robert_TOMCAT_3_netcdf4_archives\for_PNM",
            # 'data_path': r"A:\Robert_TOMCAT_3_netcdf4_archives\processed_1200_dry_seg_aniso_sep",
+           'data_path': r"Z:\Robert_TOMCAT_3_combined_archives",
             'sample': sample
         # 'sample': 'T3_100_7_III',
         # 'sample': 'T3_025_3_III',

@@ -34,7 +34,7 @@ temp_folder = r"Z:\users\firo\joblib_tmp"
 ecdf = robpylib.CommonFunctions.Tools.weighted_ecdf
 
 sourceFolder = r"A:\Robert_TOMCAT_3_netcdf4_archives\processed_1200_dry_seg_aniso_sep"
-
+dumpfilename = r"R:\Scratch\305\_Robert\simulation_dump\results_random_wait_v3_theoryR4_calibrated_waiting_times_first_run_no_extend.p"
 #  extract distribution of peaks per pore
 peak_num = np.array([])
 comb_diff_data = np.array([])
@@ -201,7 +201,7 @@ def DT(beta):
     DT = 4/beta
     return DT
 
-def calibrate_waiting_time(waiting_times, data,seed=1000, cut_off = 1000):
+def calibrate_waiting_time(waiting_times, data,seed=1000, cut_off = 10000):
     dt = DT(data['sig_fit_data'].sel(sig_fit_var = 'beta [1_s]').data)
     dt = dt[dt<cut_off]
     x,y = robpylib.CommonFunctions.Tools.weighted_ecdf(dt)
@@ -214,16 +214,25 @@ def calibrate_waiting_time(waiting_times, data,seed=1000, cut_off = 1000):
     
     return waiting_times
 
-def calibrate_waiting_time_theoretic(waiting_times, r_i, lengths, R0, cos = np.cos(48/180*np.pi), gamma = 72E-3):
+def calibrate_waiting_time_theoretic(waiting_times, r_i, lengths, R0, cos = np.cos(48/180*np.pi), gamma = 72E-3, mu = 1E-3):
     # pc = RQ = R dV/dt = R pi r**2*l/dt
-    pc = 2*gamma*cos/r_i
-    dt = R0*np.pi*r_i**2*lengths/pc
+    # pc = 2*gamma*cos/r_i
+    # dt = 2*R0*np.pi*r_i**2*lengths/pc + 2*8*mu*lengths**2/np.pi/r_i**2/pc
+    #  get the proper formula from paper 1
+    dt = lengths*R0*np.pi*r_i**3/2/gamma/cos*3
     waiting_times = waiting_times-dt
+    waiting_times[waiting_times<0] = 0
+    return waiting_times
+
+def calibrate_waiting_time_with_previous_run(waiting_times, old_results, i):
+    result = old_results[i]
+    dt = result[4] - result[3]
+    waiting_times = waiting_times - dt
     waiting_times[waiting_times<0] = 0
     return waiting_times
     
 
-def core_simulation(r_i, lengths, adj_matrix, inlets, timesteps,  pnm_params, peak_fun, i, pnm, diff_data, R0=1):
+def core_simulation(r_i, lengths, adj_matrix, inlets, timesteps,  pnm_params, peak_fun, i, pnm, diff_data, R0=1, old_results=None):
     size = len(r_i)
 
     if len(diff_data)==2:
@@ -231,10 +240,11 @@ def core_simulation(r_i, lengths, adj_matrix, inlets, timesteps,  pnm_params, pe
     else:
         prng = np.random.RandomState(i)
         waiting_times = from_ecdf(diff_data, size, seed=i+1)
-        waiting_times = extend_waiting_time(waiting_times, from_ecdf, peak_fun(prng.rand(size)), diff_data, i)
-        waiting_times = calibrate_waiting_time(waiting_times, pnm.data, seed = i+1000)
+        # waiting_times = extend_waiting_time(waiting_times, from_ecdf, peak_fun(prng.rand(size)), diff_data, i)
+        # waiting_times = calibrate_waiting_time(waiting_times, pnm.data, seed = i+1000)
         # waiting_times = calibrate_waiting_time_theoretic(waiting_times, r_i, lengths, R0)
-    
+        if old_results is not None:
+            waiting_times = calibrate_waiting_time_with_previous_run(waiting_times, old_results, i-5)
     #  pass the pnm with the experimental activation time in the case of running the validation samples
     # time, V, V0, activation_time, filling_time = simulation(r_i, lengths, waiting_times, adj_matrix, inlets, timesteps, node_dict = pnm.label_dict, pnm = pnm, R0=R0,sample=pnm.sample)
     time, V, V0, activation_time, filling_time = simulation(r_i, lengths, waiting_times, adj_matrix, inlets, timesteps, node_dict = pnm.label_dict, R0=R0,sample=pnm.sample)
@@ -247,7 +257,7 @@ def core_simulation(r_i, lengths, adj_matrix, inlets, timesteps,  pnm_params, pe
     return new_time, new_V, V0, activation_time, filling_time, waiting_times
 
 
-def core_function(samples, timesteps, i, peak_fun=peak_fun, inlet_count = 2, diff_data=None):
+def core_function(samples, timesteps, i, peak_fun=peak_fun, inlet_count = 2, diff_data=None, old_results=None):
     prng3 = np.random.RandomState(i)
     sample = prng3.choice(samples)
     pnm_params = {
@@ -265,7 +275,7 @@ def core_function(samples, timesteps, i, peak_fun=peak_fun, inlet_count = 2, dif
 
     pnm = PNM(**pnm_params)
     graph = pnm.graph.copy()
-    R0 = 0.5E17#4E15
+    R0 = 4E17#4E15
     # print('inlet R '+str(R0))
     
     # ####fixed inlets for validation samples##############
@@ -332,7 +342,7 @@ def core_function(samples, timesteps, i, peak_fun=peak_fun, inlet_count = 2, dif
     lengths = np.concatenate([lengths, inlet_heights])
     
     adj_matrix = nx.to_numpy_array(graph)
-    result_sim = core_simulation(r_i, lengths, adj_matrix, inlets, timesteps,  pnm_params, peak_fun, i, pnm, diff_data, R0=R0)
+    result_sim = core_simulation(r_i, lengths, adj_matrix, inlets, timesteps,  pnm_params, peak_fun, i, pnm, diff_data, R0=R0, old_results=old_results)
     centrality = np.array(list(nx.betweenness_centrality(graph).values()))
     centrality3 = np.array(list(nx.betweenness_centrality_source(graph, sources=sources2).values()))
     centrality2 = np.array(list(nx.betweenness_centrality_subset(graph, sources, targets, normalized=True).values()))
@@ -387,14 +397,13 @@ not_extreme_samples.remove('T3_025_9_III') #very little uptake --> v2,v3
 # not_extreme_samples.remove('T3_300_4') #very little uptake
 # not_extreme_samples.remove('T3_100_7') #very little uptake
 
-
+old_results = None
+if os.path.exists(dumpfilename):
+    old_results = pickle.load(open(dumpfilename,'rb'))
+    dumpfilename = r"R:\Scratch\305\_Robert\simulation_dump\results_random_wait_v3_theoryR4_calibrated_waiting_times_second_run_no_extend.p"
 # temp_folder = None
-results = Parallel(n_jobs=njobs, temp_folder=temp_folder)(delayed(core_function)(not_extreme_samples, timesteps, i+5) for i in range(128))  
-# results = Parallel(n_jobs=njobs)(delayed(core_function)(not_extreme_samples, timesteps, i, diff_data=[comb_diff_data, comb_weight_data]) for i in range(3*512))  
- 
-# result = core_function(not_extreme_samples, timesteps, 1)
+results = Parallel(n_jobs=njobs, temp_folder=temp_folder)(delayed(core_function)(not_extreme_samples, timesteps, i+5, old_results=old_results) for i in range(128))  
 
-dumpfilename = r"R:\Scratch\305\_Robert\simulation_dump\results_random_wait_v3_calibrated_waiting_times.p"
 dumpfile = open(dumpfilename, 'wb')
 pickle.dump(results, dumpfile)
 dumpfile.close()
