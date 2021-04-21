@@ -36,7 +36,7 @@ levels = 10
 ecdf = robpylib.CommonFunctions.Tools.weighted_ecdf
 
 sourceFolder = r"A:\Robert_TOMCAT_3_netcdf4_archives\processed_1200_dry_seg_aniso_sep"
-
+sourceFolder = r"A:\Robert_TOMCAT_3_combined_archives"
 #  extract distribution of peaks per pore
 peak_num = np.array([])
 comb_diff_data = np.array([])
@@ -203,7 +203,7 @@ def get_network_parameter(i, samples, inlet_count, return_pnm=False):
     prng3 = np.random.RandomState(i)
     sample = prng3.choice(samples)
     pnm_params = {
-           'data_path': r"A:\Robert_TOMCAT_3_netcdf4_archives\for_PNM",
+           'data_path': r"A:\Robert_TOMCAT_3_combined_archives",
           # 'data_path': r"A:\Robert_TOMCAT_3_netcdf4_archives\processed_1200_dry_seg_aniso_sep",
             'sample': sample,
             # 'graph': nx.watts_strogatz_graph(400,8,0.1, seed=i+1),
@@ -262,7 +262,7 @@ def core_simulation(r_i, lengths, adj_matrix, inlets, timesteps,  pnm_params, pe
     else:
         prng = np.random.RandomState(i)
         waiting_times = from_ecdf(diff_data, size, seed=i+1)
-        waiting_times = extend_waiting_time(waiting_times, from_ecdf, peak_fun(prng.rand(size)), diff_data, i)
+        # waiting_times = extend_waiting_time(waiting_times, from_ecdf, peak_fun(prng.rand(size)), diff_data, i)
     
     #  pass the pnm with the experimental activation time in the case of running the validation samples
     # time, V, V0, activation_time, filling_time = simulation(r_i, lengths, waiting_times, adj_matrix, inlets, timesteps, node_dict = pnm.label_dict, pnm = pnm, R0=R0,sample=pnm.sample)
@@ -398,8 +398,17 @@ paper_samples = [
     'T3_300_8_III',
     'T3_300_9_III'
 ]
-
-not_extreme_samples = paper_samples
+samples_3b = ['T3_025_10_IV',
+  'T3_025_3_IV',
+  'T3_025_6_IV',
+  'T3_025_9_IV',
+  'T3_100_07_IV',
+  'T3_100_08_IV',
+  'T3_100_10_IV',
+  'T3_300_13_IV',
+  'T3_300_15_IV',
+  'T3_300_9_IV']
+not_extreme_samples = paper_samples +samples_3b
 not_extreme_samples.remove('T3_100_1') #processing artefacts from moving sample
 not_extreme_samples.remove('T3_025_4') #very little uptake --> v3
 not_extreme_samples.remove('T3_025_9_III') #very little uptake --> v2,v3
@@ -413,7 +422,7 @@ results = Parallel(n_jobs=njobs, temp_folder=temp_folder)(delayed(core_function)
 # results = result
 
 
-dumpfilename = r"R:\Scratch\305\_Robert\simulation_dump\results_stitched_10_level_no_wait_extension_R4.p"
+dumpfilename = r"R:\Scratch\305\_Robert\simulation_dump\results_stitched_10_level_no_wait_extension_R4_with_3b.p"
 dumpfile = open(dumpfilename, 'wb')
 pickle.dump(results, dumpfile)
 dumpfile.close()

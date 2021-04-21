@@ -128,6 +128,6 @@ for result in results:
     edge_centrality = result[-2]
     edge_wait = result[-1]
     meancentrality[cc] = edge_centrality.mean()
-    weighted_edge_wait[cc] = np.average(edge_wait, weights=edge_centrality**3)
+    weighted_edge_wait[cc] = np.average(edge_wait, weights=edge_centrality**4-1/edge_centrality)
     mean_wait[cc] = edge_wait.mean()
     cc += 1

@@ -34,7 +34,8 @@ temp_folder = r"Z:\users\firo\joblib_tmp"
 ecdf = robpylib.CommonFunctions.Tools.weighted_ecdf
 
 sourceFolder = r"A:\Robert_TOMCAT_3_netcdf4_archives\processed_1200_dry_seg_aniso_sep"
-dumpfilename = r"R:\Scratch\305\_Robert\simulation_dump\results_random_wait_v3_theoryR4_calibrated_waiting_times_first_run_no_extend.p"
+sourceFolder = r"A:\Robert_TOMCAT_3_combined_archives"
+dumpfilename = r"R:\Scratch\305\_Robert\simulation_dump\results_random_wait_v3_R4_with_3b_samples_calibrate_exp_stat.p"
 #  extract distribution of peaks per pore
 peak_num = np.array([])
 comb_diff_data = np.array([])
@@ -240,8 +241,8 @@ def core_simulation(r_i, lengths, adj_matrix, inlets, timesteps,  pnm_params, pe
     else:
         prng = np.random.RandomState(i)
         waiting_times = from_ecdf(diff_data, size, seed=i+1)
-        # waiting_times = extend_waiting_time(waiting_times, from_ecdf, peak_fun(prng.rand(size)), diff_data, i)
-        # waiting_times = calibrate_waiting_time(waiting_times, pnm.data, seed = i+1000)
+        waiting_times = extend_waiting_time(waiting_times, from_ecdf, peak_fun(prng.rand(size)), diff_data, i)
+        waiting_times = calibrate_waiting_time(waiting_times, pnm.data, seed = i+1000)
         # waiting_times = calibrate_waiting_time_theoretic(waiting_times, r_i, lengths, R0)
         if old_results is not None:
             waiting_times = calibrate_waiting_time_with_previous_run(waiting_times, old_results, i-5)
@@ -261,7 +262,7 @@ def core_function(samples, timesteps, i, peak_fun=peak_fun, inlet_count = 2, dif
     prng3 = np.random.RandomState(i)
     sample = prng3.choice(samples)
     pnm_params = {
-           'data_path': r"A:\Robert_TOMCAT_3_netcdf4_archives\for_PNM",
+           'data_path': r"A:\Robert_TOMCAT_3_combined_archives",
           # 'data_path': r"A:\Robert_TOMCAT_3_netcdf4_archives\processed_1200_dry_seg_aniso_sep",
             'sample': sample,
             # 'graph': nx.watts_strogatz_graph(400,8,0.1, seed=i+1),
@@ -390,7 +391,18 @@ paper_samples = [
     'T3_300_9_III'
 ]
 
-not_extreme_samples = paper_samples
+samples_3b = ['T3_025_10_IV',
+  'T3_025_3_IV',
+  'T3_025_6_IV',
+  'T3_025_9_IV',
+  'T3_100_07_IV',
+  'T3_100_08_IV',
+  'T3_100_10_IV',
+  'T3_300_13_IV',
+  'T3_300_15_IV',
+  'T3_300_9_IV']
+
+not_extreme_samples = paper_samples + samples_3b
 not_extreme_samples.remove('T3_100_1') #processing artefacts from moving sample
 not_extreme_samples.remove('T3_025_4') #very little uptake --> v3
 not_extreme_samples.remove('T3_025_9_III') #very little uptake --> v2,v3

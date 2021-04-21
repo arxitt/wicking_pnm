@@ -82,10 +82,10 @@ class PNM:
         # self.pore_diff_path = path.join(data_path, pore_diff_dir, 'peak_diff_data_' + sample + '.nc')
         self.exp_data_path = path.join(data_path, 'dyn_data_' + sample + '.nc')
         self.pore_props_path = path.join(data_path,  'pore_props_' + sample + '.nc')
-        # self.pore_diff_path = path.join(data_path, 'peak_diff_data_' + sample + '.nc')
-        drive = r'\\152.88.86.87\data118'
-        diff_data_path = path.join(drive, 'Robert_TOMCAT_3_netcdf4_archives', 'processed_1200_dry_seg_aniso_sep')
-        self.pore_diff_path = path.join(diff_data_path, 'peak_diff_data_' + sample + '.nc')
+        self.pore_diff_path = path.join(data_path, 'peak_diff_data_' + sample + '.nc')
+        # drive = r'\\152.88.86.87\data118'
+        # diff_data_path = path.join(drive, 'Robert_TOMCAT_3_netcdf4_archives', 'processed_1200_dry_seg_aniso_sep')
+        # self.pore_diff_path = path.join(diff_data_path, 'peak_diff_data_' + sample + '.nc')
 
         self.randomize_waiting_times = rand_waiting_times
         self.pore_diff_data = None

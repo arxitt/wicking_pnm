@@ -14,11 +14,12 @@ import matplotlib.pyplot as plt
 px = 2.75E-6
 vx = px**3
 
-results = pickle.load(open(r"R:\Scratch\305\_Robert\simulation_dump\results_random_wait_v3_theoryR4_calibrated_waiting_times_first_run_no_extend.p", 'rb'))
+results = pickle.load(open(r"R:\Scratch\305\_Robert\simulation_dump\results_random_wait_v3_R4_with_3b_samples_calibrate_theory.p", 'rb'))
 
 results_sim = np.zeros((len(results),len(results[0][1])))
 
-results_exp = np.load(r"H:\11_Essential_Data\03_TOMCAT\uptakes.npy")*vx
+# results_exp = np.load(r"H:\11_Essential_Data\03_TOMCAT\uptakes.npy")*vx
+results_exp = np.load(r"H:\11_Essential_Data\03_TOMCAT\uptakes_combined_3_3b.npy")
 
 exp_mean = np.nanmean(results_exp, axis=0)
 exp_std = np.nanstd(results_exp, axis=0)
@@ -47,10 +48,10 @@ plt.fill_between(sim_time, sim_mean+sim_std, sim_mean-sim_std, color='r', alpha=
 plt.plot(sim_min, 'r--')
 plt.plot(sim_max, 'r--')
 
-plt.title('R=4E17, waiting_times calibrated')
+plt.title('R=4E17, with new exp data theory calibrated')
 # plt.title('R=1, waiting_times not calibrated')
 # plt.title('R=0.5E17, waiting_times not calibrated')
 
 
 plt.xlim(0,1600)
-plt.ylim(0,5E-11)
+plt.ylim(0,10E-11)
