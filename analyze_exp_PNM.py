@@ -51,6 +51,30 @@ not_extreme_samples = paper_samples+ samples_3b
 # not_extreme_samples.remove('T3_025_4') #very little uptake --> v3
 not_extreme_samples.remove('T3_025_9_III') #very little uptake --> v2,v3
 
+def edge_centrality_Newman_Girvan(graph_input, iterations = 3):
+    graph = graph_input.copy()
+    edge_list = list(graph.edges())
+    numedge = len(edge_list)
+    centrality_matrix = np.zeros((iterations,numedge))
+    for i in range(iterations):
+        edge_centrality = nx.edge_betweenness_centrality(graph)
+        MVEid = np.array(list(edge_centrality.values())).argmax()
+        MVE = list(graph.edges())[MVEid]
+        for c in range(numedge):
+            edge = edge_list[c]
+            if edge in graph.edges():
+                centrality_matrix[i, c] = edge_centrality[edge]
+            if edge == MVE:
+                # print(edge)
+                centrality_matrix[:, c] = edge_centrality[edge]
+        graph.remove_edge(*MVE)
+    edge_centrality = centrality_matrix.mean(axis=0)
+    return edge_centrality
+        
+        
+        
+    return edge_centrality
+
 def function(sample):
     pnm_params = {
             # 'data_path': r"Z:\Robert_TOMCAT_3_netcdf4_archives\for_PNM",
@@ -77,7 +101,9 @@ def function(sample):
     centrality2 = np.array(list(nx.betweenness_centrality_subset(graph, sources, targets, normalized=True).values()))
     centrality5 = np.array(list(nx.betweenness_centrality_source(graph, sources=sources).values()))
     
-    edge_centrality = np.array(list(nx.edge_betweenness_centrality(graph).values()))
+    # edge_centrality = np.array(list(nx.edge_betweenness_centrality(graph).values()))
+    
+    edge_centrality = edge_centrality_Newman_Girvan(graph, 5)
     edge_waiting = np.zeros(len(edge_centrality))
     
     waiting_times = np.zeros(len(centrality))
@@ -128,6 +154,6 @@ for result in results:
     edge_centrality = result[-2]
     edge_wait = result[-1]
     meancentrality[cc] = edge_centrality.mean()
-    weighted_edge_wait[cc] = np.average(edge_wait, weights=edge_centrality**4-1/edge_centrality)
+    weighted_edge_wait[cc] = np.average(edge_wait, weights=edge_centrality)
     mean_wait[cc] = edge_wait.mean()
     cc += 1
