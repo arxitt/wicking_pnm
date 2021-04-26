@@ -14,7 +14,7 @@ import matplotlib.pyplot as plt
 px = 2.75E-6
 vx = px**3
 
-results = pickle.load(open(r"R:\Scratch\305\_Robert\simulation_dump\results_random_wait_v3_R4_with_3b_samples_calibrate_theory.p", 'rb'))
+results = pickle.load(open(r"R:\Scratch\305\_Robert\simulation_dump\results_random_wait_v3_R4_with_3b_samples_calibrate_exp_stat.p", 'rb'))
 
 results_sim = np.zeros((len(results),len(results[0][1])))
 
@@ -48,7 +48,7 @@ plt.fill_between(sim_time, sim_mean+sim_std, sim_mean-sim_std, color='r', alpha=
 plt.plot(sim_min, 'r--')
 plt.plot(sim_max, 'r--')
 
-plt.title('R=4E17, with new exp data theory calibrated')
+plt.title('R=4E17, with new exp data exp stats calibrated')
 # plt.title('R=1, waiting_times not calibrated')
 # plt.title('R=0.5E17, waiting_times not calibrated')
 
