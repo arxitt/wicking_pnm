@@ -39,9 +39,9 @@ samples_3b = ['T3_025_10_IV',
  'T3_025_3_IV',
  'T3_025_6_IV',
  'T3_025_9_IV',
- 'T3_100_07_IV',
+  'T3_100_07_IV',
  'T3_100_08_IV',
- 'T3_100_10_IV',
+    'T3_100_10_IV',
  'T3_300_13_IV',
  'T3_300_15_IV',
  'T3_300_9_IV']
@@ -51,7 +51,7 @@ not_extreme_samples = paper_samples+ samples_3b
 # not_extreme_samples.remove('T3_025_4') #very little uptake --> v3
 not_extreme_samples.remove('T3_025_9_III') #very little uptake --> v2,v3
 
-def edge_centrality_Newman_Girvan(graph_input, iterations = 3):
+def edge_centrality_Newman_Girvan(graph_input, iterations = 4):
     graph = graph_input.copy()
     edge_list = list(graph.edges())
     numedge = len(edge_list)
@@ -68,18 +68,15 @@ def edge_centrality_Newman_Girvan(graph_input, iterations = 3):
                 # print(edge)
                 centrality_matrix[:, c] = edge_centrality[edge]
         graph.remove_edge(*MVE)
-    edge_centrality = centrality_matrix.mean(axis=0)
+    edge_centrality = np.max(centrality_matrix, axis=0)
     return edge_centrality
-        
-        
-        
-    return edge_centrality
+
 
 def function(sample):
     pnm_params = {
             # 'data_path': r"Z:\Robert_TOMCAT_3_netcdf4_archives\for_PNM",
            # 'data_path': r"A:\Robert_TOMCAT_3_netcdf4_archives\processed_1200_dry_seg_aniso_sep",
-           'data_path': r"Z:\Robert_TOMCAT_3_combined_archives",
+           'data_path': r"A:\Robert_TOMCAT_3_combined_archives",
             'sample': sample
         # 'sample': 'T3_100_7_III',
         # 'sample': 'T3_025_3_III',
@@ -103,7 +100,7 @@ def function(sample):
     
     # edge_centrality = np.array(list(nx.edge_betweenness_centrality(graph).values()))
     
-    edge_centrality = edge_centrality_Newman_Girvan(graph, 5)
+    edge_centrality = edge_centrality_Newman_Girvan(graph, iterations = 5)
     edge_waiting = np.zeros(len(edge_centrality))
     
     waiting_times = np.zeros(len(centrality))

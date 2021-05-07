@@ -26,10 +26,10 @@ import os
 import robpylib
 import pickle
 
-temp_folder = r"Z:\users\firo\joblib_tmp"
-# temp_folder = None
+# temp_folder = r"Z:\users\firo\joblib_tmp"
+temp_folder = None
 
-levels = 10
+levels = 2
 
 # TODO: build random sample choice
 
@@ -37,6 +37,7 @@ ecdf = robpylib.CommonFunctions.Tools.weighted_ecdf
 
 sourceFolder = r"A:\Robert_TOMCAT_3_netcdf4_archives\processed_1200_dry_seg_aniso_sep"
 sourceFolder = r"A:\Robert_TOMCAT_3_combined_archives"
+sourceFolder = '/home/firo/NAS/Robert_TOMCAT_3_combined_archives' 
 #  extract distribution of peaks per pore
 peak_num = np.array([])
 comb_diff_data = np.array([])
@@ -203,8 +204,9 @@ def get_network_parameter(i, samples, inlet_count, return_pnm=False):
     prng3 = np.random.RandomState(i)
     sample = prng3.choice(samples)
     pnm_params = {
-           'data_path': r"A:\Robert_TOMCAT_3_combined_archives",
+           # 'data_path': r"A:\Robert_TOMCAT_3_combined_archives",
           # 'data_path': r"A:\Robert_TOMCAT_3_netcdf4_archives\processed_1200_dry_seg_aniso_sep",
+            'data_path': '/home/firo/NAS/Robert_TOMCAT_3_combined_archives' , 
             'sample': sample,
             # 'graph': nx.watts_strogatz_graph(400,8,0.1, seed=i+1),
         # 'sample': 'T3_100_7_III',
@@ -214,28 +216,32 @@ def get_network_parameter(i, samples, inlet_count, return_pnm=False):
            # 'randomize_pore_data': True,
           'seed': (i+3)**3
     } 
-    pnm = PNM(**pnm_params)
-    graph = pnm.graph.copy()
-    r_i = pnm.radi.copy()
-    volumes = pnm.volumes.copy()
-    lengths = volumes/np.pi/r_i**2
-    sourcesraw = np.unique(pnm.data['label_matrix'][:,:,0])[1:]
-    targetsraw = np.unique(pnm.data['label_matrix'][:,:,-1])[1:]
-    sources = []
-    targets = []
-    for k in sourcesraw:
-        if k in graph.nodes():
-            sources.append(k)
-    for k in targetsraw:
-        if k in graph.nodes():
-            targets.append(k)
-    bottoms = sources
-    tops = targets
-
+    try:
+        pnm = PNM(**pnm_params)
+        graph = pnm.graph.copy()
+        r_i = pnm.radi.copy()
+        volumes = pnm.volumes.copy()
+        lengths = volumes/np.pi/r_i**2
+        sourcesraw = np.unique(pnm.data['label_matrix'][:,:,0])[1:]
+        targetsraw = np.unique(pnm.data['label_matrix'][:,:,-1])[1:]
+        sources = []
+        targets = []
+        for k in sourcesraw:
+            if k in graph.nodes():
+                sources.append(k)
+        for k in targetsraw:
+            if k in graph.nodes():
+                targets.append(k)
+        bottoms = sources
+        tops = targets
+    except:
+        print(sample)
+        r_i, lengths, volumes, graph, bottoms, tops, pnm, pnm_params, sample = get_network_parameter(i+1, samples, inlet_count, return_pnm=True)
+        
     if return_pnm:
-        return r_i, lengths, volumes, graph, bottoms, tops, pnm, pnm_params
+        return r_i, lengths, volumes, graph, bottoms, tops, pnm, pnm_params, sample
     else:
-        return r_i, lengths, volumes, graph, bottoms, tops
+        return r_i, lengths, volumes, graph, bottoms, tops, sample
 
 def stitch_graphs(graph1, graph2, top_nodes1, bottom_nodes2, level):
     nodes2 = np.array(graph2.nodes())+level*1000
@@ -279,97 +285,104 @@ def core_simulation(r_i, lengths, adj_matrix, inlets, timesteps,  pnm_params, pe
 
 
 def core_function(samples, timesteps, i, peak_fun=peak_fun, inlet_count = 2, diff_data=None, levels=1):
-    r_i, lengths, volumes, graph, bottoms_level1, tops_level1, pnm, pnm_params = get_network_parameter(i, samples, inlet_count, return_pnm =  True)
-    
-    sources2 = bottoms_level1
-    
-    for level in range(1, levels):
-        r2, l2,v2, graph2, bottoms2, tops2 = get_network_parameter(int(i*2+level/2+13), samples, inlet_count)
-        r_i = np.concatenate([r_i, r2])
-        lengths = np.concatenate([lengths, l2])
-        volumes = np.concatenate([volumes, v2])
-        graph = stitch_graphs(graph, graph2, tops_level1, bottoms2, level)
-        tops_level1 = np.array(tops2)+1000*level
-   
-    targets = tops_level1
+    try:
+        r_i, lengths, volumes, graph, bottoms_level1, tops_level1, pnm, pnm_params, sample = get_network_parameter(i, samples, inlet_count, return_pnm =  True)
+        used_samples = []
+        used_samples.append(sample)
+        sources2 = bottoms_level1
         
-    
-    R0 = 4E17#4E15
-    # print('inlet R '+str(R0))
-    
-    # ####fixed inlets for validation samples##############
-    # inlet_nodes = [162,171,207]
-    # if pnm.sample == 'T3_100_7_III': inlet_nodes = [86, 89, 90, 52]
-    # if pnm.sample == 'T3_300_8_III': inlet_nodes = [   13,    63,   149]
-    # inlets = []
-    # found_inlets = []
-    # for inlet in inlet_nodes:
-    #     inlet = int(inlet)
-    #     if inlet in pnm.label_dict:
-    #         inlets.append(pnm.label_dict[inlet])
-    #         found_inlets.append(inlet)
-    #     else:
-    #         print('Failed to find node named', inlet)
-
-    # print('Got inlet labels:', inlets)
-   
-    # pnm1.inlets = inlets
-    # pnm1.build_inlets()
-    ############# 
-    
-    
-    if diff_data is None:    
-        diff_data = pnm.pore_diff_data
-        
-    
-    #  TODO: inlets have to be at the bottom or at least in the first level
-    inlets = pnm.inlets.copy()  # <- in first level
-    prng7 = np.random.RandomState(i+3)
-    inlets = prng7.choice(sources2, 2) #bottom of fisrt level
-    # sources = prng7.choice(sources, 4)
-    # inlets = sources
-    
-    found_inlets = []
-    for inlet in inlets:
-        
-        found_inlets.append(pnm.nodes[inlet])
-
-
-    v_inlets = -1*(np.arange(len(inlets))+1)
-    for k in range(len(inlets)):
-        graph.add_edge(found_inlets[k], v_inlets[k])
-    inlets = v_inlets
-    sources = inlets
+        for level in range(1, levels):
+            r2, l2,v2, graph2, bottoms2, tops2, sample = get_network_parameter(int(i*2+level/2+13), samples, inlet_count)
+            r_i = np.concatenate([r_i, r2])
+            lengths = np.concatenate([lengths, l2])
+            volumes = np.concatenate([volumes, v2])
+            graph = stitch_graphs(graph, graph2, tops_level1, bottoms2, level)
+            tops_level1 = np.array(tops2)+1000*level
+            used_samples.append(sample)
+       
+        targets = tops_level1
             
-    inlet_radii = np.zeros(len(inlets))
-    inlet_heights = np.zeros(len(inlets))
+        
+        R0 = 4E17#4E15
+        # print('inlet R '+str(R0))
+        
+        # ####fixed inlets for validation samples##############
+        # inlet_nodes = [162,171,207]
+        # if pnm.sample == 'T3_100_7_III': inlet_nodes = [86, 89, 90, 52]
+        # if pnm.sample == 'T3_300_8_III': inlet_nodes = [   13,    63,   149]
+        # inlets = []
+        # found_inlets = []
+        # for inlet in inlet_nodes:
+        #     inlet = int(inlet)
+        #     if inlet in pnm.label_dict:
+        #         inlets.append(pnm.label_dict[inlet])
+        #         found_inlets.append(inlet)
+        #     else:
+        #         print('Failed to find node named', inlet)
     
-
+        # print('Got inlet labels:', inlets)
+       
+        # pnm1.inlets = inlets
+        # pnm1.build_inlets()
+        ############# 
+        
+        
+        if diff_data is None:    
+            diff_data = pnm.pore_diff_data
+            
+        
+        #  TODO: inlets have to be at the bottom or at least in the first level
+        inlets = pnm.inlets.copy()  # <- in first level
+        prng7 = np.random.RandomState(i+3)
+        inlets = prng7.choice(sources2, 2) #bottom of fisrt level
+        # sources = prng7.choice(sources, 4)
+        # inlets = sources
+        
+        found_inlets = []
+        for inlet in inlets:
+            
+            found_inlets.append(pnm.nodes[inlet])
     
-    r_i = np.concatenate([r_i, inlet_radii])
-    lengths = np.concatenate([lengths, inlet_heights])
     
-    adj_matrix = nx.to_numpy_array(graph)
-    result_sim = core_simulation(r_i, lengths, adj_matrix, inlets, timesteps,  pnm_params, peak_fun, i, pnm, diff_data, R0=R0)
-    centrality = np.array(list(nx.betweenness_centrality(graph).values()))
-    centrality3 = np.array(list(nx.betweenness_centrality_source(graph, sources=sources2).values()))
-    centrality2 = np.array(list(nx.betweenness_centrality_subset(graph, sources, targets, normalized=True).values()))
-    centrality4 = np.array(list(nx.betweenness_centrality_subset(graph, sources2, targets, normalized=True).values()))
-    centrality5 = np.array(list(nx.betweenness_centrality_source(graph, sources=sources).values()))
-    result_sim = result_sim + (centrality5,)
-    result_sim = result_sim + (centrality4,)
-    result_sim = result_sim + (centrality3,)
-    result_sim = result_sim + (centrality2,)
-    result_sim = result_sim + (pnm.data.attrs['tension'], centrality)
-    # V0 = result_sim[2]
-    time = result_sim[0]
-    V = result_sim[1]
-    ref = np.argmax(V)
-    mean_flux = V[ref]/time[ref]
-    result_sim = result_sim + (mean_flux,)
-    result_sim = result_sim + (graph, )
+        v_inlets = -1*(np.arange(len(inlets))+1)
+        for k in range(len(inlets)):
+            graph.add_edge(found_inlets[k], v_inlets[k])
+        inlets = v_inlets
+        sources = inlets
+                
+        inlet_radii = np.zeros(len(inlets))
+        inlet_heights = np.zeros(len(inlets))
+        
     
-    return result_sim
+        
+        r_i = np.concatenate([r_i, inlet_radii])
+        lengths = np.concatenate([lengths, inlet_heights])
+        
+        adj_matrix = nx.to_numpy_array(graph)
+        result_sim = core_simulation(r_i, lengths, adj_matrix, inlets, timesteps,  pnm_params, peak_fun, i, pnm, diff_data, R0=R0)
+        centrality = np.array(list(nx.betweenness_centrality(graph).values()))
+        centrality3 = np.array(list(nx.betweenness_centrality_source(graph, sources=sources2).values()))
+        centrality2 = np.array(list(nx.betweenness_centrality_subset(graph, sources, targets, normalized=True).values()))
+        centrality4 = np.array(list(nx.betweenness_centrality_subset(graph, sources2, targets, normalized=True).values()))
+        centrality5 = np.array(list(nx.betweenness_centrality_source(graph, sources=sources).values()))
+        result_sim = result_sim + (used_samples,)
+        result_sim = result_sim + (centrality5,)
+        result_sim = result_sim + (centrality4,)
+        result_sim = result_sim + (centrality3,)
+        result_sim = result_sim + (centrality2,)
+        result_sim = result_sim + (pnm.data.attrs['tension'], centrality)
+        # V0 = result_sim[2]
+        time = result_sim[0]
+        V = result_sim[1]
+        ref = np.argmax(V)
+        mean_flux = V[ref]/time[ref]
+        result_sim = result_sim + (mean_flux,)
+        result_sim = result_sim + (graph, )
+        
+        return result_sim
+    except:
+        print(i)
+        return None
     # return graph
 
 print('Warning: diff data path is hard-coded!')
@@ -405,7 +418,7 @@ samples_3b = ['T3_025_10_IV',
   'T3_100_07_IV',
   'T3_100_08_IV',
   'T3_100_10_IV',
-  'T3_300_13_IV',
+  # 'T3_300_13_IV', some strange errors, ignore
   'T3_300_15_IV',
   'T3_300_9_IV']
 not_extreme_samples = paper_samples +samples_3b
@@ -421,8 +434,9 @@ results = Parallel(n_jobs=njobs, temp_folder=temp_folder)(delayed(core_function)
 # result = core_function(not_extreme_samples, timesteps, 1, levels=levels)
 # results = result
 
-
-dumpfilename = r"R:\Scratch\305\_Robert\simulation_dump\results_stitched_10_level_no_wait_extension_R4_with_3b.p"
+dumppath = '/home/firo'
+# dumpfilename = r"R:\Scratch\305\_Robert\simulation_dump\results_stitched_10_level_no_wait_extension_R4_with_3b_v2.p"
+dumpfilename = os.path.join(dumppath, 'results_stitched_10_level_no_wait_extension_R4_with_3b_v2.p')
 dumpfile = open(dumpfilename, 'wb')
 pickle.dump(results, dumpfile)
 dumpfile.close()

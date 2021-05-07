@@ -35,7 +35,7 @@ ecdf = robpylib.CommonFunctions.Tools.weighted_ecdf
 
 sourceFolder = r"A:\Robert_TOMCAT_3_netcdf4_archives\processed_1200_dry_seg_aniso_sep"
 sourceFolder = r"A:\Robert_TOMCAT_3_combined_archives"
-dumpfilename = r"R:\Scratch\305\_Robert\simulation_dump\results_random_wait_v3_R4_with_3b_samples_calibrate_exp_stat.p"
+dumpfilename = r"R:\Scratch\305\_Robert\simulation_dump\results_random_wait_v3_R4_no_extend_v2_512runs_repeat.p"
 #  extract distribution of peaks per pore
 peak_num = np.array([])
 comb_diff_data = np.array([])
@@ -241,11 +241,11 @@ def core_simulation(r_i, lengths, adj_matrix, inlets, timesteps,  pnm_params, pe
     else:
         prng = np.random.RandomState(i)
         waiting_times = from_ecdf(diff_data, size, seed=i+1)
-        waiting_times = extend_waiting_time(waiting_times, from_ecdf, peak_fun(prng.rand(size)), diff_data, i)
-        waiting_times = calibrate_waiting_time(waiting_times, pnm.data, seed = i+1000)
+        # waiting_times = extend_waiting_time(waiting_times, from_ecdf, peak_fun(prng.rand(size)), diff_data, i)
+        # waiting_times = calibrate_waiting_time(waiting_times, pnm.data, seed = i+1000)
         # waiting_times = calibrate_waiting_time_theoretic(waiting_times, r_i, lengths, R0)
-        if old_results is not None:
-            waiting_times = calibrate_waiting_time_with_previous_run(waiting_times, old_results, i-5)
+        # if old_results is not None:
+            # waiting_times = calibrate_waiting_time_with_previous_run(waiting_times, old_results, i-5)
     #  pass the pnm with the experimental activation time in the case of running the validation samples
     # time, V, V0, activation_time, filling_time = simulation(r_i, lengths, waiting_times, adj_matrix, inlets, timesteps, node_dict = pnm.label_dict, pnm = pnm, R0=R0,sample=pnm.sample)
     time, V, V0, activation_time, filling_time = simulation(r_i, lengths, waiting_times, adj_matrix, inlets, timesteps, node_dict = pnm.label_dict, R0=R0,sample=pnm.sample)
@@ -349,6 +349,7 @@ def core_function(samples, timesteps, i, peak_fun=peak_fun, inlet_count = 2, dif
     centrality2 = np.array(list(nx.betweenness_centrality_subset(graph, sources, targets, normalized=True).values()))
     centrality4 = np.array(list(nx.betweenness_centrality_subset(graph, sources2, targets, normalized=True).values()))
     centrality5 = np.array(list(nx.betweenness_centrality_source(graph, sources=sources).values()))
+    result_sim = result_sim + (sample,)
     result_sim = result_sim + (centrality5,)
     result_sim = result_sim + (centrality4,)
     result_sim = result_sim + (centrality3,)
@@ -398,7 +399,7 @@ samples_3b = ['T3_025_10_IV',
   'T3_100_07_IV',
   'T3_100_08_IV',
   'T3_100_10_IV',
-  'T3_300_13_IV',
+  # 'T3_300_13_IV', some strange errors, ignore
   'T3_300_15_IV',
   'T3_300_9_IV']
 
@@ -412,9 +413,9 @@ not_extreme_samples.remove('T3_025_9_III') #very little uptake --> v2,v3
 old_results = None
 if os.path.exists(dumpfilename):
     old_results = pickle.load(open(dumpfilename,'rb'))
-    dumpfilename = r"R:\Scratch\305\_Robert\simulation_dump\results_random_wait_v3_theoryR4_calibrated_waiting_times_second_run_no_extend.p"
+    dumpfilename = r"R:\Scratch\305\_Robert\simulation_dump\results_random_wait_v3_R4_no_extend_v2.p"
 # temp_folder = None
-results = Parallel(n_jobs=njobs, temp_folder=temp_folder)(delayed(core_function)(not_extreme_samples, timesteps, i+5, old_results=old_results) for i in range(128))  
+results = Parallel(n_jobs=njobs, temp_folder=temp_folder)(delayed(core_function)(not_extreme_samples, timesteps, i+5, old_results=old_results) for i in range(512))  
 
 dumpfile = open(dumpfilename, 'wb')
 pickle.dump(results, dumpfile)
