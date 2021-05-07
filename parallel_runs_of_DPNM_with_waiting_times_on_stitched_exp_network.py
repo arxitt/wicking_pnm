@@ -29,7 +29,7 @@ import pickle
 # temp_folder = r"Z:\users\firo\joblib_tmp"
 temp_folder = None
 
-levels = 5
+levels = 10
 
 # TODO: build random sample choice
 
