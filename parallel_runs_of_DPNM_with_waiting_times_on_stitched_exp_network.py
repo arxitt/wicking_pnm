@@ -25,6 +25,7 @@ import xarray as xr
 import os
 import robpylib
 import pickle
+import time
 
 # temp_folder = r"Z:\users\firo\joblib_tmp"
 temp_folder = None
@@ -285,6 +286,7 @@ def core_simulation(r_i, lengths, adj_matrix, inlets, timesteps,  pnm_params, pe
 
 
 def core_function(samples, timesteps, i, peak_fun=peak_fun, inlet_count = 2, diff_data=None, levels=1):
+    # TODO: add timeout
     try:
         r_i, lengths, volumes, graph, bottoms_level1, tops_level1, pnm, pnm_params, sample = get_network_parameter(i, samples, inlet_count, return_pnm =  True)
         used_samples = []
@@ -428,7 +430,7 @@ not_extreme_samples.remove('T3_025_9_III') #very little uptake --> v2,v3
 # not_extreme_samples.remove('T3_300_4') #very little uptake
 # not_extreme_samples.remove('T3_100_7') #very little uptake
 
-results = Parallel(n_jobs=njobs, temp_folder=temp_folder)(delayed(core_function)(not_extreme_samples, timesteps, i+5, levels=levels) for i in range(64))  
+results = Parallel(n_jobs=njobs, temp_folder=temp_folder, timeout=4*3600)(delayed(core_function)(not_extreme_samples, timesteps, i+5, levels=levels) for i in range(64))  
 # results = Parallel(n_jobs=njobs)(delayed(core_function)(not_extreme_samples, timesteps, i, diff_data=[comb_diff_data, comb_weight_data]) for i in range(3*512))  
  
 # result = core_function(not_extreme_samples, timesteps, 1, levels=levels)
