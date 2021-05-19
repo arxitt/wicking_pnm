@@ -26,6 +26,8 @@ import os
 import robpylib
 import pickle
 import time
+import multiprocessing
+import functools
 
 # temp_folder = r"Z:\users\firo\joblib_tmp"
 temp_folder = None
@@ -72,7 +74,18 @@ x, y = ecdf(peak_num)
 
 peak_fun = interp1d(y, x, fill_value = 'extrapolate')
 
-
+def with_timeout(timeout):
+    def decorator(decorated):
+        @functools.wraps(decorated)
+        def inner(*args, **kwargs):
+            pool = multiprocessing.pool.ThreadPool(1)
+            async_result = pool.apply_async(decorated, args, kwargs)
+            try:
+                return async_result.get(timeout)
+            except multiprocessing.TimeoutError:
+                return
+        return inner
+    return decorator
 
 def generalized_gamma_cdf(x, xm, d, b, x0):
     y = sp.special.gammainc(d/b, ((x-x0)/xm)**b)/sp.special.gamma(d/b)
@@ -284,7 +297,7 @@ def core_simulation(r_i, lengths, adj_matrix, inlets, timesteps,  pnm_params, pe
    
     return new_time, new_V, V0, activation_time, filling_time, waiting_times
 
-
+@with_timeout(4*3600)
 def core_function(samples, timesteps, i, peak_fun=peak_fun, inlet_count = 2, diff_data=None, levels=1):
     # TODO: add timeout
     try:
@@ -430,7 +443,7 @@ not_extreme_samples.remove('T3_025_9_III') #very little uptake --> v2,v3
 # not_extreme_samples.remove('T3_300_4') #very little uptake
 # not_extreme_samples.remove('T3_100_7') #very little uptake
 
-results = Parallel(n_jobs=njobs, temp_folder=temp_folder, timeout=4*3600)(delayed(core_function)(not_extreme_samples, timesteps, i+5, levels=levels) for i in range(64))  
+results = Parallel(n_jobs=njobs, temp_folder=temp_folder)(delayed(core_function)(not_extreme_samples, timesteps, i+5, levels=levels) for i in range(64))  
 # results = Parallel(n_jobs=njobs)(delayed(core_function)(not_extreme_samples, timesteps, i, diff_data=[comb_diff_data, comb_weight_data]) for i in range(3*512))  
  
 # result = core_function(not_extreme_samples, timesteps, 1, levels=levels)
