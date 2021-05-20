@@ -297,7 +297,7 @@ def core_simulation(r_i, lengths, adj_matrix, inlets, timesteps,  pnm_params, pe
    
     return new_time, new_V, V0, activation_time, filling_time, waiting_times
 
-@with_timeout(4*3600)
+@with_timeout(22*3600)
 def core_function(samples, timesteps, i, peak_fun=peak_fun, inlet_count = 2, diff_data=None, levels=1):
     # TODO: add timeout
     try:
