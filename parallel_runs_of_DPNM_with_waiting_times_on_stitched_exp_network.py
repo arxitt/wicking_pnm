@@ -297,7 +297,7 @@ def core_simulation(r_i, lengths, adj_matrix, inlets, timesteps,  pnm_params, pe
    
     return new_time, new_V, V0, activation_time, filling_time, waiting_times
 
-@with_timeout(22*3600)
+@with_timeout(32*3600)
 def core_function(samples, timesteps, i, peak_fun=peak_fun, inlet_count = 2, diff_data=None, levels=1):
     # TODO: add timeout
     try:
@@ -451,7 +451,7 @@ results = Parallel(n_jobs=njobs, temp_folder=temp_folder)(delayed(core_function)
 
 dumppath = '/home/firo'
 # dumpfilename = r"R:\Scratch\305\_Robert\simulation_dump\results_stitched_10_level_no_wait_extension_R4_with_3b_v2.p"
-dumpfilename = os.path.join(dumppath, 'results_stitched_10_level_no_wait_extension_R4_with_3b_v2_64.p')
+dumpfilename = os.path.join(dumppath, 'results_stitched_10_level_no_wait_extension_R4_with_3b_v2_64_timeout_32h.p')
 dumpfile = open(dumpfilename, 'wb')
 pickle.dump(results, dumpfile)
 dumpfile.close()
