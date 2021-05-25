@@ -29,6 +29,8 @@ import time
 import multiprocessing
 import functools
 
+
+failed_list = [18, 19, 20, 22, 24, 58, 62, 63]
 # temp_folder = r"Z:\users\firo\joblib_tmp"
 temp_folder = None
 
@@ -443,7 +445,8 @@ not_extreme_samples.remove('T3_025_9_III') #very little uptake --> v2,v3
 # not_extreme_samples.remove('T3_300_4') #very little uptake
 # not_extreme_samples.remove('T3_100_7') #very little uptake
 
-results = Parallel(n_jobs=njobs, temp_folder=temp_folder)(delayed(core_function)(not_extreme_samples, timesteps, i+5, levels=levels) for i in range(64))  
+# results = Parallel(n_jobs=njobs, temp_folder=temp_folder)(delayed(core_function)(not_extreme_samples, timesteps, i+5, levels=levels) for i in range(64))  
+results = Parallel(n_jobs=njobs, temp_folder=temp_folder)(delayed(core_function)(not_extreme_samples, int(0.75*timesteps), i+5, levels=levels) for i in failed_list) 
 # results = Parallel(n_jobs=njobs)(delayed(core_function)(not_extreme_samples, timesteps, i, diff_data=[comb_diff_data, comb_weight_data]) for i in range(3*512))  
  
 # result = core_function(not_extreme_samples, timesteps, 1, levels=levels)
@@ -451,7 +454,7 @@ results = Parallel(n_jobs=njobs, temp_folder=temp_folder)(delayed(core_function)
 
 dumppath = '/home/firo'
 # dumpfilename = r"R:\Scratch\305\_Robert\simulation_dump\results_stitched_10_level_no_wait_extension_R4_with_3b_v2.p"
-dumpfilename = os.path.join(dumppath, 'results_stitched_10_level_no_wait_extension_R4_with_3b_v2_64_timeout_32h.p')
+dumpfilename = os.path.join(dumppath, 'results_stitched_10_level_no_wait_extension_R4_with_3b_v2_64_timeout_32h_failed_075_ts.p')
 dumpfile = open(dumpfilename, 'wb')
 pickle.dump(results, dumpfile)
 dumpfile.close()
