@@ -288,7 +288,7 @@ def core_simulation(r_i, lengths, adj_matrix, inlets, timesteps,  pnm_params, pe
     
     #  pass the pnm with the experimental activation time in the case of running the validation samples
     # time, V, V0, activation_time, filling_time = simulation(r_i, lengths, waiting_times, adj_matrix, inlets, timesteps, node_dict = pnm.label_dict, pnm = pnm, R0=R0,sample=pnm.sample)
-    time, V, V0, activation_time, filling_time = simulation(r_i, lengths, waiting_times, adj_matrix, inlets, timesteps, node_dict = pnm.label_dict, R0=R0,sample=pnm.sample)
+    time, V, V0, activation_time, filling_time = simulation(r_i, lengths, waiting_times, adj_matrix, inlets, timesteps, node_dict = pnm.label_dict, R0=R0,sample=pnm.sample, tlim=60*60)
     V_fun = interp1d(time, V, fill_value = 'extrapolate')
     
     max_time = filling_time.max()
