@@ -74,7 +74,7 @@ def init_regular_grid(dim):
     return adj_matrix, r_i, lengths, waiting_times, inlets
 
 
-def simulation(r_i, lengths, waiting_times, adj_matrix, inlets,  timesteps, sig_diffs = None, node_dict = None, patm = patm, eta = eta, gamma = gamma, cos = cos, R0 = R0, pnm=None, sample=None):
+def simulation(r_i, lengths, waiting_times, adj_matrix, inlets,  timesteps, sig_diffs = None, node_dict = None, patm = patm, eta = eta, gamma = gamma, cos = cos, R0 = R0, pnm=None, sample=None, tlim=1E16):
     
     size = adj_matrix.shape[0]
     
@@ -114,7 +114,7 @@ def simulation(r_i, lengths, waiting_times, adj_matrix, inlets,  timesteps, sig_
         # flag = False
         # if t % 5000 == 0: flag=True
         # let loop roll off if full saturation is reached
-        if V[t-1] >= V0: 
+        if V[t-1] >= V0 or time[t-1]>tlim: 
             time[t] = time[t-1] + dt
             V[t] = V[t-1]
             continue
