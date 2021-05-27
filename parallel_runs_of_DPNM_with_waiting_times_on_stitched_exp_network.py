@@ -31,6 +31,8 @@ import functools
 
 
 failed_list = [18, 19, 20, 22, 24, 58, 62, 63]
+# failed_failed = 
+# failed_list = failed_list[failed_failed]
 # temp_folder = r"Z:\users\firo\joblib_tmp"
 temp_folder = None
 
@@ -454,7 +456,7 @@ results = Parallel(n_jobs=njobs, temp_folder=temp_folder)(delayed(core_function)
 
 dumppath = '/home/firo'
 # dumpfilename = r"R:\Scratch\305\_Robert\simulation_dump\results_stitched_10_level_no_wait_extension_R4_with_3b_v2.p"
-dumpfilename = os.path.join(dumppath, 'results_stitched_10_level_no_wait_extension_R4_with_3b_v2_64_timeout_32h_failed_075_ts.p')
+dumpfilename = os.path.join(dumppath, 'results_stitched_10_level_no_wait_extension_R4_with_3b_v2_64_timeout_32h_fail_60min.p')
 dumpfile = open(dumpfilename, 'wb')
 pickle.dump(results, dumpfile)
 dumpfile.close()
