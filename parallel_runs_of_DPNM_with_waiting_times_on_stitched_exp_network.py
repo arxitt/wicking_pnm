@@ -290,7 +290,7 @@ def core_simulation(r_i, lengths, adj_matrix, inlets, timesteps,  pnm_params, pe
     
     #  pass the pnm with the experimental activation time in the case of running the validation samples
     # time, V, V0, activation_time, filling_time = simulation(r_i, lengths, waiting_times, adj_matrix, inlets, timesteps, node_dict = pnm.label_dict, pnm = pnm, R0=R0,sample=pnm.sample)
-    time, V, V0, activation_time, filling_time = simulation(r_i, lengths, waiting_times, adj_matrix, inlets, timesteps, node_dict = pnm.label_dict, R0=R0,sample=pnm.sample, tlim=60*60)
+    time, V, V0, activation_time, filling_time = simulation(r_i, lengths, waiting_times, adj_matrix, inlets, timesteps, node_dict = pnm.label_dict, R0=R0,sample=pnm.sample, tlim=45*60)
     V_fun = interp1d(time, V, fill_value = 'extrapolate')
     
     max_time = filling_time.max()
@@ -456,7 +456,7 @@ results = Parallel(n_jobs=njobs, temp_folder=temp_folder)(delayed(core_function)
 
 dumppath = '/home/firo'
 # dumpfilename = r"R:\Scratch\305\_Robert\simulation_dump\results_stitched_10_level_no_wait_extension_R4_with_3b_v2.p"
-dumpfilename = os.path.join(dumppath, 'results_stitched_10_level_no_wait_extension_R4_with_3b_v2_64_timeout_32h_fail_60min.p')
+dumpfilename = os.path.join(dumppath, 'results_stitched_10_level_no_wait_extension_R4_with_3b_v2_64_timeout_32h_fail_45min.p')
 dumpfile = open(dumpfilename, 'wb')
 pickle.dump(results, dumpfile)
 dumpfile.close()
