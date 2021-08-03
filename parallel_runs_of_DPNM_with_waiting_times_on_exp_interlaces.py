@@ -29,7 +29,6 @@ import pickle
 temp_folder = r"Z:\users\firo\joblib_tmp"
 temp_folder = None
 
-# TODO: build random sample choice
 
 ecdf = robpylib.CommonFunctions.Tools.weighted_ecdf
 
@@ -337,6 +336,9 @@ def core_function(samples, timesteps, i, peak_fun=peak_fun, inlet_count = 2, dif
     r_i = pnm.radi.copy()
     lengths = pnm.volumes.copy()/np.pi/r_i**2
     
+    # or, if minor axes are not reliable
+    # lengths = pnm.lengths.copy()
+    # r_i = np.sqrt(pnm.volumes.copy()/lengths/np.pi)
     
     r_i = np.concatenate([r_i, inlet_radii])
     lengths = np.concatenate([lengths, inlet_heights])
@@ -375,11 +377,11 @@ timesteps = 5000000#0#0#0
 # multi-sample run
 not_extreme_samples = ['T4_025_1_III',
  # 'T4_025_2_II',
- 'T4_025_3',
- 'T4_025_4',
+ 'T4_025_3', #takes up much more water than others, either artifact or outlier, consider leaving out
+ 'T4_025_4', 
  'T4_100_2_III',
  'T4_100_3',
- 'T4_100_4',
+ # 'T4_100_4',  some error
  'T4_100_5',
  'T4_300_1',
  'T4_300_2_II',
