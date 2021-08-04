@@ -20,7 +20,7 @@ results = pickle.load(open(r"R:\Scratch\305\_Robert\simulation_dump\results_rand
 results_sim = np.zeros((len(results),len(results[0][1])))
 
 # results_exp = np.load(r"H:\11_Essential_Data\03_TOMCAT\uptakes.npy")*vx
-results_exp = np.load(r"H:\11_Essential_Data\03_TOMCAT\uptakes_combined_3_3bv2.npy")
+results_exp = np.load(r"H:\11_Essential_Data\03_TOMCAT\uptakes_combined_3_3b.npy")
 
 exp_mean = np.nanmean(results_exp, axis=0)
 exp_std = np.nanstd(results_exp, axis=0)
@@ -39,24 +39,24 @@ sim_time = np.arange(sim_mean.size)
 sim_min = np.nanmin(results_sim, axis=0)
 sim_max = np.nanmax(results_sim, axis=0)
 
-plt.plot(exp_mean, 'r')
-plt.fill_between(exp_time, exp_mean+exp_std, exp_mean-exp_std, color='r', alpha=0.2)
-plt.plot(exp_min, 'r--')
-plt.plot(exp_max, 'r--')
+plt.plot(exp_mean, 'k', label = 'exp')
+plt.fill_between(exp_time, exp_mean+exp_std, exp_mean-exp_std, color='k', alpha=0.2)
+plt.plot(exp_min, 'k--')
+plt.plot(exp_max, 'k--')
 
-plt.plot(sim_mean, 'k')
-plt.fill_between(sim_time, sim_mean+sim_std, sim_mean-sim_std, color='k', alpha=0.2)
-plt.plot(sim_min, 'k--')
-plt.plot(sim_max, 'k--')
+plt.plot(sim_mean, 'r', label = 'sim')
+plt.fill_between(sim_time, sim_mean+sim_std, sim_mean-sim_std, color='r', alpha=0.2)
+plt.plot(sim_min, 'r--')
+plt.plot(sim_max, 'r--')
 
 # plt.title('R=4E17')
 # plt.title('R=1, waiting_times not calibrated')
 # plt.title('R=0.5E17, waiting_times not calibrated')
 plt.xlabel('time [s]')
 plt.ylabel('volume [m3]')
-
+plt.legend()
 plt.xlim(0,1600)
-plt.ylim(0,9E-11)
-
-filepath = r"R:\Scratch\305\_Robert\pnm_to_exp_R4_v3_with3b.tex"
-tikzplotlib.save(filepath)
+plt.ylim(0,8E-11)
+plt.savefig(r"C:\Users\firo\Desktop\for_Jan\XRCT_exp_sim.png", dpi = 600)
+# filepath = r"R:\Scratch\305\_Robert\pnm_to_exp_R4_v3_with3b.tex"
+# tikzplotlib.save(filepath)
