@@ -32,7 +32,7 @@ temp_folder = None
 
 ecdf = robpylib.CommonFunctions.Tools.weighted_ecdf
 
-sourceFolder = r"Z:\Robert_TOMCAT_4_netcdf4_split_v2"
+sourceFolder = r"Z:\Robert_TOMCAT_4_netcdf4_split_v2_no_pore_size_lim"
 dumpfilename = r"R:\Scratch\305\_Robert\simulation_dump\results_interlaces_test.p"
 #  extract distribution of peaks per pore
 peak_num = np.array([])
