@@ -260,7 +260,7 @@ def core_function(samples, timesteps, i, peak_fun=peak_fun, inlet_count = 2, dif
     prng3 = np.random.RandomState(i)
     sample = prng3.choice(samples)
     pnm_params = {
-           'data_path': r"Z:\Robert_TOMCAT_4_netcdf4_split_v2",
+           'data_path': r"Z:\Robert_TOMCAT_4_netcdf4_split_v2_no_pore_size_lim",
           # 'data_path': r"A:\Robert_TOMCAT_3_netcdf4_archives\processed_1200_dry_seg_aniso_sep",
             'sample': sample,
             # 'graph': nx.watts_strogatz_graph(400,8,0.1, seed=i+1),
@@ -390,7 +390,11 @@ not_extreme_samples = ['T4_025_1_III',
  'T4_300_5_III']
 
 
-results = Parallel(n_jobs=njobs, temp_folder=temp_folder)(delayed(core_function)(not_extreme_samples, timesteps, i+5) for i in range(16))  
+# results = Parallel(n_jobs=njobs, temp_folder=temp_folder)(delayed(core_function)(not_extreme_samples, timesteps, i+5) for i in range(16))  
+
+results = []
+for i in range(16):
+    results.append(core_function(not_extreme_samples, timesteps, i+5))
 
 dumpfile = open(dumpfilename, 'wb')
 pickle.dump(results, dumpfile)
