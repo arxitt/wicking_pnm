@@ -33,7 +33,7 @@ def label_function(struct, pore_object, label, labels, verbose = False):
     if verbose:
         print('Searching around {}'.format(label))
 
-    mask = sp.ndimage.binary_dilation(input = mask, structure = struct(3))
+    mask = sp.ndimage.binary_dilation(input = mask, structure = struct(6))
     neighbors = np.unique(pore_object[mask])[1:]
 
     for nb in neighbors:
@@ -140,7 +140,7 @@ class PNM:
         undirected network i-j needs to be calculated in a second step
         """
 
-        def extend_bounding_box(s, shape, pad=3):
+        def extend_bounding_box(s, shape, pad=6):
             a = deque()
             for i, dim in zip(s, shape):
                 start = 0

@@ -71,6 +71,25 @@ def edge_centrality_Newman_Girvan(graph_input, iterations = 4):
     edge_centrality = np.max(centrality_matrix, axis=0)
     return edge_centrality
 
+def node_centrality_Newman_Girvan(graph_input, iterations = 4):
+    graph = graph_input.copy()
+    nodes = list(graph.nodes())
+    num_nodes = len(nodes)
+    centrality_matrix = np.zeros((iterations, num_nodes))
+    
+    for i in range(iterations):
+        node_centrality = nx.betweenness_centrality(graph)
+        MVNid = np.array(list(node_centrality.values())).argmax()
+        MVN = list(graph.nodes())[MVNid]
+        for c in range(num_nodes):
+            node = nodes[c]
+            if node in graph.nodes():
+                centrality_matrix[i, c] = node_centrality[node]
+            if node == MVN:
+                centrality_matrix[:, c] = node_centrality[node]
+        graph.remove_node(MVN)
+    node_centrality = np.max(centrality_matrix, axis=0)
+    return node_centrality
 
 def function(sample):
     pnm_params = {
