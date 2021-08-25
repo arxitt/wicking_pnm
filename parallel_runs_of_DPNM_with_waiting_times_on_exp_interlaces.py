@@ -25,6 +25,8 @@ import xarray as xr
 import os
 import robpylib
 import pickle
+import socket
+host = socket.gethostname()
 
 temp_folder = r"Z:\users\firo\joblib_tmp"
 temp_folder = None
@@ -32,8 +34,18 @@ temp_folder = None
 
 ecdf = robpylib.CommonFunctions.Tools.weighted_ecdf
 
-sourceFolder = r"Z:\Robert_TOMCAT_4_netcdf4_split_v2_no_pore_size_lim"
-dumpfilename = r"R:\Scratch\305\_Robert\simulation_dump\results_interlaces_test.p"
+NASdrive = r"Z:"
+Rdrive = r"R:"
+
+if host == 'mavt-cbp-w001m':
+    NASdrive = '/Users/robfisch/NAS'
+    Rdrive =  '/Users/robfisch/share/Unsaved/'
+
+sourceFolder = os.path.join(NASdrive, "Robert_TOMCAT_4_netcdf4_split_v2_no_pore_size_lim")
+dumpfilename = os.path.join(Rdrive,"Scratch",'305','_Robert','simulation_dump', 'results_interlaces_test_mac.p')
+
+
+
 #  extract distribution of peaks per pore
 peak_num = np.array([])
 comb_diff_data = np.array([])
@@ -260,7 +272,8 @@ def core_function(samples, timesteps, i, peak_fun=peak_fun, inlet_count = 2, dif
     prng3 = np.random.RandomState(i)
     sample = prng3.choice(samples)
     pnm_params = {
-           'data_path': r"Z:\Robert_TOMCAT_4_netcdf4_split_v2_no_pore_size_lim",
+           # 'data_path': r"Z:\Robert_TOMCAT_4_netcdf4_split_v2_no_pore_size_lim",
+           'data_path': sourceFolder,
           # 'data_path': r"A:\Robert_TOMCAT_3_netcdf4_archives\processed_1200_dry_seg_aniso_sep",
             'sample': sample,
             # 'graph': nx.watts_strogatz_graph(400,8,0.1, seed=i+1),
@@ -367,12 +380,12 @@ def core_function(samples, timesteps, i, peak_fun=peak_fun, inlet_count = 2, dif
     
     return result_sim
 
-print('Warning: diff data path is hard-coded!')
+# print('Warning: diff data path is hard-coded!')
 # print('Warning: Inlets and inlet resistance hard-coded')
 print('Warning: Inlet resistance hard-coded')
 # print('Warning peak number hard-coded to 1')
-njobs = 32
-timesteps = 5000000#0#0#0
+njobs = 16
+timesteps = 50#00000#0#0#0
 
 # multi-sample run
 not_extreme_samples = ['T4_025_1_III',
@@ -390,11 +403,11 @@ not_extreme_samples = ['T4_025_1_III',
  'T4_300_5_III']
 
 
-# results = Parallel(n_jobs=njobs, temp_folder=temp_folder)(delayed(core_function)(not_extreme_samples, timesteps, i+5) for i in range(16))  
+results = Parallel(n_jobs=njobs, temp_folder=temp_folder)(delayed(core_function)(not_extreme_samples, timesteps, i+5) for i in range(16))  
 
-results = []
-for i in range(16):
-    results.append(core_function(not_extreme_samples, timesteps, i+5))
+# results = []
+# for i in range(16):
+    # results.append(core_function(not_extreme_samples, timesteps, i+5))
 
 dumpfile = open(dumpfilename, 'wb')
 pickle.dump(results, dumpfile)
