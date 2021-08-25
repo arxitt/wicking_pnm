@@ -36,13 +36,15 @@ ecdf = robpylib.CommonFunctions.Tools.weighted_ecdf
 
 NASdrive = r"Z:"
 Rdrive = r"R:"
+njobs = 16
 
 if host == 'mavt-cbp-w001m':
     NASdrive = '/Users/robfisch/NAS'
-    Rdrive =  '/Users/robfisch/share/Unsaved/'
+    Rdrive =  NASdrive
+    njobs = 8
 
 sourceFolder = os.path.join(NASdrive, "Robert_TOMCAT_4_netcdf4_split_v2_no_pore_size_lim")
-dumpfilename = os.path.join(Rdrive,"Scratch",'305','_Robert','simulation_dump', 'results_interlaces_test_mac.p')
+dumpfilename = os.path.join(Rdrive,'simulation_dump', 'results_interlaces_test_mac.p')
 
 
 
@@ -384,8 +386,8 @@ def core_function(samples, timesteps, i, peak_fun=peak_fun, inlet_count = 2, dif
 # print('Warning: Inlets and inlet resistance hard-coded')
 print('Warning: Inlet resistance hard-coded')
 # print('Warning peak number hard-coded to 1')
-njobs = 16
-timesteps = 50#00000#0#0#0
+
+timesteps = 5#000000#0#0#0
 
 # multi-sample run
 not_extreme_samples = ['T4_025_1_III',
