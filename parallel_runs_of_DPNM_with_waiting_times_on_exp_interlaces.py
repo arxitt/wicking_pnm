@@ -44,7 +44,7 @@ if host == 'mavt-cbp-w001m':
     njobs = 8
 
 sourceFolder = os.path.join(NASdrive, "Robert_TOMCAT_4_netcdf4_split_v2_no_pore_size_lim")
-dumpfilename = os.path.join(Rdrive,'simulation_dump', 'results_interlaces_test_mac2.p')
+dumpfilename = os.path.join(Rdrive,'simulation_dump', 'results_interlaces_test_preprop_nets.p')
 
 
 
