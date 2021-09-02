@@ -81,7 +81,16 @@ x, y = ecdf(peak_num)
 
 peak_fun = interp1d(y, x, fill_value = 'extrapolate')
 
-
+def reconstruct_graph_from_netcdf4(path):
+    data = xr.load_dataset(path)
+    nodes = data['nodes'].data
+    mapping = {}
+    for i in range(len(nodes)):
+        mapping[i] = nodes[i]
+    adj_matrix = data['adj_matrix'].data
+    graph = nx.from_numpy_array(adj_matrix)
+    H = nx.relabel_nodes(graph, mapping)
+    return H
 
 def generalized_gamma_cdf(x, xm, d, b, x0):
     y = sp.special.gammainc(d/b, ((x-x0)/xm)**b)/sp.special.gamma(d/b)
@@ -245,13 +254,13 @@ def calibrate_waiting_time_with_previous_run(waiting_times, old_results, i):
     return waiting_times
     
 
-def core_simulation(r_i, lengths, adj_matrix, inlets, timesteps,  pnm_params, peak_fun, i, pnm, diff_data, R0=1, old_results=None):
+def core_simulation(r_i, lengths, adj_matrix, inlets, timesteps,   peak_fun, i,  diff_data,sample, R0=1, old_results=None):
     size = len(r_i)
 
     if len(diff_data)==2:
         waiting_times = generate_combined_waiting_times(diff_data, size, peak_fun, i)
     else:
-        prng = np.random.RandomState(i)
+        # prng = np.random.RandomState(i)
         waiting_times = from_ecdf(diff_data, size, seed=i+1)
         # waiting_times = extend_waiting_time(waiting_times, from_ecdf, peak_fun(prng.rand(size)), diff_data, i)
         # waiting_times = calibrate_waiting_time(waiting_times, pnm.data, seed = i+1000)
@@ -260,7 +269,7 @@ def core_simulation(r_i, lengths, adj_matrix, inlets, timesteps,  pnm_params, pe
             # waiting_times = calibrate_waiting_time_with_previous_run(waiting_times, old_results, i-5)
     #  pass the pnm with the experimental activation time in the case of running the validation samples
     # time, V, V0, activation_time, filling_time = simulation(r_i, lengths, waiting_times, adj_matrix, inlets, timesteps, node_dict = pnm.label_dict, pnm = pnm, R0=R0,sample=pnm.sample)
-    time, V, V0, activation_time, filling_time = simulation(r_i, lengths, waiting_times, adj_matrix, inlets, timesteps, node_dict = pnm.label_dict, R0=R0,sample=pnm.sample)
+    time, V, V0, activation_time, filling_time = simulation(r_i, lengths, waiting_times, adj_matrix, inlets, timesteps,  R0=R0,sample=sample)
     V_fun = interp1d(time, V, fill_value = 'extrapolate')
     
     new_time = np.arange(3000)
@@ -273,22 +282,24 @@ def core_simulation(r_i, lengths, adj_matrix, inlets, timesteps,  pnm_params, pe
 def core_function(samples, timesteps, i, peak_fun=peak_fun, inlet_count = 2, diff_data=None, old_results=None):
     prng3 = np.random.RandomState(i)
     sample = prng3.choice(samples)
-    pnm_params = {
-           # 'data_path': r"Z:\Robert_TOMCAT_4_netcdf4_split_v2_no_pore_size_lim",
-           'data_path': sourceFolder,
-          # 'data_path': r"A:\Robert_TOMCAT_3_netcdf4_archives\processed_1200_dry_seg_aniso_sep",
-            'sample': sample,
-            # 'graph': nx.watts_strogatz_graph(400,8,0.1, seed=i+1),
-        # 'sample': 'T3_100_7_III',
-        # 'sample': 'T3_025_3_III',
-        # 'sample': 'T3_300_8_III',
-          'inlet_count': inlet_count,
-           # 'randomize_pore_data': True,
-          'seed': (i+3)**3
-    }
+    # pnm_params = {
+    #        # 'data_path': r"Z:\Robert_TOMCAT_4_netcdf4_split_v2_no_pore_size_lim",
+    #        'data_path': sourceFolder,
+    #       # 'data_path': r"A:\Robert_TOMCAT_3_netcdf4_archives\processed_1200_dry_seg_aniso_sep",
+    #         'sample': sample,
+    #         # 'graph': nx.watts_strogatz_graph(400,8,0.1, seed=i+1),
+    #     # 'sample': 'T3_100_7_III',
+    #     # 'sample': 'T3_025_3_III',
+    #     # 'sample': 'T3_300_8_III',
+    #       'inlet_count': inlet_count,
+    #        # 'randomize_pore_data': True,
+    #       'seed': (i+3)**3
+    # }
 
-    pnm = PNM(**pnm_params)
-    graph = pnm.graph.copy()
+    # pnm = PNM(**pnm_params)
+    # graph = pnm.graph.copy()
+    netpath = os.path.join(sourceFolder, ''.join(['network_',sample,'.nc']))
+    graph = reconstruct_graph_from_netcdf4(netpath)
     R0 = 1E15#4E15
     # print('inlet R '+str(R0))
     
@@ -312,12 +323,19 @@ def core_function(samples, timesteps, i, peak_fun=peak_fun, inlet_count = 2, dif
     # pnm.build_inlets()
     ############# 
     
-    if diff_data is None:    
-        diff_data = pnm.pore_diff_data
+    # if diff_data is None:    
+        # diff_data = pnm.pore_diff_data
+    diffpath = os.path.join(sourceFolder, ''.join(['peak_diff_data_',sample,'.nc']))
+    diff_data = xr.load_dataset(diffpath)
     
-    sourcesraw = np.unique(pnm.data['label_matrix'][:,:,0])[1:]
-    targetsraw = np.unique(pnm.data['label_matrix'][:,:,-1])[1:]
+    data = xr.open_dataset(os.path.join(sourceFolder, ''.join(['dyn_data_',sample,'.nc'])))
+    pore_data = xr.load_dataset(os.path.join(sourceFolder, ''.join(['pore_props_',sample,'.nc'])))
+    
+    # check waht is actually bottom and top
+    sourcesraw = np.unique(data['label_matrix'][:,:,0])[1:]
+    targetsraw = np.unique(data['label_matrix'][:,:,-1])[1:]
 
+    
     sources = []
     targets = []
     for k in sourcesraw:
@@ -333,23 +351,29 @@ def core_function(samples, timesteps, i, peak_fun=peak_fun, inlet_count = 2, dif
     # sources = prng7.choice(sources, 4)
     # inlets = sources
     
-    found_inlets = []
-    for inlet in inlets:
+    # found_inlets = []
+    # for inlet in inlets:
         
-        found_inlets.append(pnm.nodes[inlet])
+    #     found_inlets.append(pnm.nodes[inlet])
 
 
     v_inlets = -1*(np.arange(len(inlets))+1)
     for k in range(len(inlets)):
-        graph.add_edge(found_inlets[k], v_inlets[k])
+        graph.add_edge(inlets[k], v_inlets[k])
     inlets = v_inlets
     sources = inlets
             
     inlet_radii = np.zeros(len(inlets))
     inlet_heights = np.zeros(len(inlets))
+    px = data.attrs['pixel_size'].data
+    vx = px**3
+    volumes =  vx*data['volume'][:,-10:-1].sel(label = graph.nodes()).median(dim='time').data#
+    volumes[volumes==0] = np.median(volumes[volumes>0])
+    data.close()
     
-    r_i = pnm.radi.copy()
-    lengths = pnm.volumes.copy()/np.pi/r_i**2
+    # r_i = pnm.radi.copy()
+    r_i = px*pore_data['value_properties'].sel(property = 'major_axis', label = graph.nodes()).data #
+    lengths = volumes/np.pi/r_i**2
     
     # or, if minor axes are not reliable
     # lengths = pnm.lengths.copy()
@@ -359,7 +383,7 @@ def core_function(samples, timesteps, i, peak_fun=peak_fun, inlet_count = 2, dif
     lengths = np.concatenate([lengths, inlet_heights])
     
     adj_matrix = nx.to_numpy_array(graph)
-    result_sim = core_simulation(r_i, lengths, adj_matrix, inlets, timesteps,  pnm_params, peak_fun, i, pnm, diff_data, R0=R0, old_results=old_results)
+    result_sim = core_simulation(r_i, lengths, adj_matrix, inlets, timesteps,   peak_fun, i,  diff_data,sample, R0=R0, old_results=old_results)
     centrality = np.array(list(nx.betweenness_centrality(graph).values()))
     centrality3 = np.array(list(nx.betweenness_centrality_source(graph, sources=sources2).values()))
     centrality2 = np.array(list(nx.betweenness_centrality_subset(graph, sources, targets, normalized=True).values()))
@@ -370,7 +394,7 @@ def core_function(samples, timesteps, i, peak_fun=peak_fun, inlet_count = 2, dif
     result_sim = result_sim + (centrality4,)
     result_sim = result_sim + (centrality3,)
     result_sim = result_sim + (centrality2,)
-    result_sim = result_sim + (pnm.data.attrs['tension'], centrality)
+    result_sim = result_sim + (centrality)
     
     # V0 = result_sim[2]
     time = result_sim[0]
@@ -396,12 +420,12 @@ not_extreme_samples = ['T4_025_1_III',
  'T4_025_4', 
  'T4_100_2_III',
  'T4_100_3',
- # 'T4_100_4',  some error  & suspociously large pore props file
+ 'T4_100_4', # some error  & suspociously large pore props file
  'T4_100_5',
  'T4_300_1',
  'T4_300_2_II',  # suspociously large pore props file
  'T4_300_3_III',
- 'T4_300_4_III',   # suspociously large pore props file
+ # 'T4_300_4_III',   # suspociously large pore props file
  'T4_300_5_III']
 
 
