@@ -35,16 +35,16 @@ temp_folder = None
 ecdf = robpylib.CommonFunctions.Tools.weighted_ecdf
 
 NASdrive = r"Z:"
-Rdrive = r"R:"
+# Rdrive = r"R:\Scratch\305\_Robert"
 njobs = 16
 
 if host == 'mavt-cbp-w001m':
     NASdrive = '/Users/robfisch/NAS'
-    Rdrive =  NASdrive
+    # Rdrive =  NASdrive
     njobs = 8
 
 sourceFolder = os.path.join(NASdrive, "Robert_TOMCAT_4_netcdf4_split_v2_no_pore_size_lim")
-dumpfilename = os.path.join(Rdrive,'simulation_dump', 'results_interlaces_test_preprop_nets.p')
+dumpfilename = os.path.join(NASdrive,'simulation_dump', 'interlaces_mac.p')
 
 
 
@@ -254,14 +254,14 @@ def calibrate_waiting_time_with_previous_run(waiting_times, old_results, i):
     return waiting_times
     
 
-def core_simulation(r_i, lengths, adj_matrix, inlets, timesteps,   peak_fun, i,  diff_data,sample, R0=1, old_results=None):
+def core_simulation(r_i, lengths, adj_matrix, inlets, timesteps, i,  diff_data,sample, R0=1, old_results=None):
     size = len(r_i)
 
-    if len(diff_data)==2:
-        waiting_times = generate_combined_waiting_times(diff_data, size, peak_fun, i)
-    else:
+    # if len(diff_data)==2:
+    #     waiting_times = generate_combined_waiting_times(diff_data, size, peak_fun, i)
+    # else:
         # prng = np.random.RandomState(i)
-        waiting_times = from_ecdf(diff_data, size, seed=i+1)
+    waiting_times = from_ecdf(diff_data, size, seed=i+1)
         # waiting_times = extend_waiting_time(waiting_times, from_ecdf, peak_fun(prng.rand(size)), diff_data, i)
         # waiting_times = calibrate_waiting_time(waiting_times, pnm.data, seed = i+1000)
         # waiting_times = calibrate_waiting_time_theoretic(waiting_times, r_i, lengths, R0)
@@ -272,14 +272,14 @@ def core_simulation(r_i, lengths, adj_matrix, inlets, timesteps,   peak_fun, i, 
     time, V, V0, activation_time, filling_time = simulation(r_i, lengths, waiting_times, adj_matrix, inlets, timesteps,  R0=R0,sample=sample)
     V_fun = interp1d(time, V, fill_value = 'extrapolate')
     
-    new_time = np.arange(3000)
+    new_time = np.arange(0,1000,0.5)
     new_V = V_fun(new_time)
     new_V[new_V>V0] = V0
    
     return new_time, new_V, V0, activation_time, filling_time, waiting_times
 
 
-def core_function(samples, timesteps, i, peak_fun=peak_fun, inlet_count = 2, diff_data=None, old_results=None):
+def core_function(samples, timesteps, i,  inlet_count = 2, diff_data=None, old_results=None):
     prng3 = np.random.RandomState(i)
     sample = prng3.choice(samples)
     # pnm_params = {
@@ -355,8 +355,16 @@ def core_function(samples, timesteps, i, peak_fun=peak_fun, inlet_count = 2, dif
     # for inlet in inlets:
         
     #     found_inlets.append(pnm.nodes[inlet])
-
-
+    px = 2.75E-6
+    vx = px**3
+    volumes =  vx*data['volume'][:,-10:-1].sel(label = list(graph.nodes())).median(dim='time').data#
+    r_i = px*pore_data['value_properties'].sel(property = 'major_axis', label = list(graph.nodes())).data #
+    volumes[volumes==0] = np.median(volumes[volumes>0])
+    lengths = volumes/np.pi/r_i**2
+    data.close()
+    
+    
+    
     v_inlets = -1*(np.arange(len(inlets))+1)
     for k in range(len(inlets)):
         graph.add_edge(inlets[k], v_inlets[k])
@@ -365,16 +373,9 @@ def core_function(samples, timesteps, i, peak_fun=peak_fun, inlet_count = 2, dif
             
     inlet_radii = np.zeros(len(inlets))
     inlet_heights = np.zeros(len(inlets))
-    px = data.attrs['pixel_size'].data
-    vx = px**3
-    volumes =  vx*data['volume'][:,-10:-1].sel(label = graph.nodes()).median(dim='time').data#
-    volumes[volumes==0] = np.median(volumes[volumes>0])
-    data.close()
-    
+   
     # r_i = pnm.radi.copy()
-    r_i = px*pore_data['value_properties'].sel(property = 'major_axis', label = graph.nodes()).data #
-    lengths = volumes/np.pi/r_i**2
-    
+  
     # or, if minor axes are not reliable
     # lengths = pnm.lengths.copy()
     # r_i = np.sqrt(pnm.volumes.copy()/lengths/np.pi)
@@ -383,7 +384,7 @@ def core_function(samples, timesteps, i, peak_fun=peak_fun, inlet_count = 2, dif
     lengths = np.concatenate([lengths, inlet_heights])
     
     adj_matrix = nx.to_numpy_array(graph)
-    result_sim = core_simulation(r_i, lengths, adj_matrix, inlets, timesteps,   peak_fun, i,  diff_data,sample, R0=R0, old_results=old_results)
+    result_sim = core_simulation(r_i, lengths, adj_matrix, inlets, timesteps,  i,  diff_data,sample, R0=R0, old_results=old_results)
     centrality = np.array(list(nx.betweenness_centrality(graph).values()))
     centrality3 = np.array(list(nx.betweenness_centrality_source(graph, sources=sources2).values()))
     centrality2 = np.array(list(nx.betweenness_centrality_subset(graph, sources, targets, normalized=True).values()))
@@ -394,7 +395,7 @@ def core_function(samples, timesteps, i, peak_fun=peak_fun, inlet_count = 2, dif
     result_sim = result_sim + (centrality4,)
     result_sim = result_sim + (centrality3,)
     result_sim = result_sim + (centrality2,)
-    result_sim = result_sim + (centrality)
+    result_sim = result_sim + (centrality,)
     
     # V0 = result_sim[2]
     time = result_sim[0]
@@ -411,17 +412,19 @@ def core_function(samples, timesteps, i, peak_fun=peak_fun, inlet_count = 2, dif
 print('Warning: Inlet resistance hard-coded')
 # print('Warning peak number hard-coded to 1')
 
-timesteps = 5#000000#0#0#0
+timesteps = 10000000#0#0#0
 
 # multi-sample run
 not_extreme_samples = ['T4_025_1_III',
  # 'T4_025_2_II',
- 'T4_025_3', #takes up much more water than others, either artifact or outlier, consider leaving out
- 'T4_025_4', 
+ 'T4_025_3', #takes up much more water than others, either artifact or outlier, consider leaving out, 
+  # has loose fibers and huge pores in comparison to other sampless<
+ # 
+ # 'T4_025_4', 
  'T4_100_2_III',
  'T4_100_3',
  'T4_100_4', # some error  & suspociously large pore props file
- 'T4_100_5',
+ # 'T4_100_5',
  'T4_300_1',
  'T4_300_2_II',  # suspociously large pore props file
  'T4_300_3_III',
@@ -429,11 +432,11 @@ not_extreme_samples = ['T4_025_1_III',
  'T4_300_5_III']
 
 
-# results = Parallel(n_jobs=njobs, temp_folder=temp_folder)(delayed(core_function)(not_extreme_samples, timesteps, i+5) for i in range(8))  
+results = Parallel(n_jobs=njobs, temp_folder=temp_folder)(delayed(core_function)(not_extreme_samples, timesteps, i+5) for i in range(16))  
 
-results = []
-for i in range(1):
-    results.append(core_function(not_extreme_samples, timesteps, i+5))
+# results = []
+# for i in range(1):
+#     results.append(core_function(not_extreme_samples, timesteps, i+5))
 
 dumpfile = open(dumpfilename, 'wb')
 pickle.dump(results, dumpfile)
