@@ -44,7 +44,7 @@ if host == 'mavt-cbp-w001m':
     njobs = 8
 
 sourceFolder = os.path.join(NASdrive, "Robert_TOMCAT_4_netcdf4_split_v2_no_pore_size_lim")
-dumpfilename = os.path.join(NASdrive,'simulation_dump', 'interlaces_mac.p')
+dumpfilename = os.path.join(NASdrive,'simulation_dump', 'interlaces_64runs.p')
 
 
 
@@ -412,7 +412,7 @@ def core_function(samples, timesteps, i,  inlet_count = 2, diff_data=None, old_r
 print('Warning: Inlet resistance hard-coded')
 # print('Warning peak number hard-coded to 1')
 
-timesteps = 10000000#0#0#0
+timesteps = 20000000#0#0#0
 
 # multi-sample run
 not_extreme_samples = ['T4_025_1_III',
@@ -432,7 +432,7 @@ not_extreme_samples = ['T4_025_1_III',
  'T4_300_5_III']
 
 
-results = Parallel(n_jobs=njobs, temp_folder=temp_folder)(delayed(core_function)(not_extreme_samples, timesteps, i+5) for i in range(16))  
+results = Parallel(n_jobs=njobs, temp_folder=temp_folder)(delayed(core_function)(not_extreme_samples, timesteps, i+5) for i in range(64))  
 
 # results = []
 # for i in range(1):
