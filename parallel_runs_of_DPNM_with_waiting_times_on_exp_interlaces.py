@@ -429,11 +429,11 @@ not_extreme_samples = ['T4_025_1_III',
  'T4_300_5_III']
 
 
-results = Parallel(n_jobs=njobs, temp_folder=temp_folder)(delayed(core_function)(not_extreme_samples, timesteps, i+5) for i in range(8))  
+# results = Parallel(n_jobs=njobs, temp_folder=temp_folder)(delayed(core_function)(not_extreme_samples, timesteps, i+5) for i in range(8))  
 
-# results = []
-# for i in range(1):
-    # results.append(core_function(not_extreme_samples, timesteps, i+5))
+results = []
+for i in range(1):
+    results.append(core_function(not_extreme_samples, timesteps, i+5))
 
 dumpfile = open(dumpfilename, 'wb')
 pickle.dump(results, dumpfile)
