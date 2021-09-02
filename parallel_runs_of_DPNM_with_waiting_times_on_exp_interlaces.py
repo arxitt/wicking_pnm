@@ -19,7 +19,7 @@ import numpy as np
 from scipy.interpolate import interp1d
 from joblib import Parallel, delayed
 import networkx as nx
-from wickingpnm.model import PNM
+# from wickingpnm.model import PNM
 from wickingpnm.old_school_DPNM_v5 import simulation
 import xarray as xr
 import os
@@ -49,37 +49,37 @@ dumpfilename = os.path.join(Rdrive,'simulation_dump', 'results_interlaces_test_p
 
 
 #  extract distribution of peaks per pore
-peak_num = np.array([])
-comb_diff_data = np.array([])
-comb_weight_data = np.array([])
-samples = []
-for sample in os.listdir(sourceFolder):
-    if sample[:3] == 'dyn':
-        data = xr.load_dataset(os.path.join(sourceFolder, sample))
-        num_sample = data['dynamics'].sel(parameter = 'num filling peaks').data
-        peak_num = np.concatenate([peak_num, num_sample])
-        samples.append(data.attrs['name'])
-    if sample[:14] == 'peak_diff_data':
-        diff_data = xr.load_dataset(os.path.join(sourceFolder, sample))
-        inter_diffs = diff_data['diffs_v2'][2:,:].data
-        inter_weights = np.ones(inter_diffs.shape)
+# peak_num = np.array([])
+# comb_diff_data = np.array([])
+# comb_weight_data = np.array([])
+# samples = []
+# for sample in os.listdir(sourceFolder):
+#     if sample[:3] == 'dyn':
+#         data = xr.load_dataset(os.path.join(sourceFolder, sample))
+#         # num_sample = data['dynamics'].sel(parameter = 'num filling peaks').data
+#         # peak_num = np.concatenate([peak_num, num_sample])
+#         samples.append(data.attrs['name'])
+    # if sample[:14] == 'peak_diff_data':
+    #     diff_data = xr.load_dataset(os.path.join(sourceFolder, sample))
+    #     inter_diffs = diff_data['diffs_v2'][2:,:].data
+    #     inter_weights = np.ones(inter_diffs.shape)
     
-        intra_diffs = diff_data['diffs_v4'][2:,:].data
-        intra_weights = np.ones(intra_diffs.shape) * diff_data['diffs_v4'][1,:].data
-        intra_weights = 1- intra_weights
+    #     intra_diffs = diff_data['diffs_v4'][2:,:].data
+    #     intra_weights = np.ones(intra_diffs.shape) * diff_data['diffs_v4'][1,:].data
+    #     intra_weights = 1- intra_weights
         
-        diffs = np.concatenate([inter_diffs.flatten(), intra_diffs.flatten()], axis=0)
-        weights = np.concatenate([inter_weights.flatten(), intra_weights.flatten()])
+    #     diffs = np.concatenate([inter_diffs.flatten(), intra_diffs.flatten()], axis=0)
+    #     weights = np.concatenate([inter_weights.flatten(), intra_weights.flatten()])
         
-        comb_diff_data = np.concatenate([comb_diff_data, diffs], axis=0)
-        comb_weight_data = np.concatenate([comb_weight_data, diffs], axis=0)
+        # comb_diff_data = np.concatenate([comb_diff_data, diffs], axis=0)
+        # comb_weight_data = np.concatenate([comb_weight_data, diffs], axis=0)
         
         
-peak_num = peak_num[peak_num>1]
+# peak_num = peak_num[peak_num>1]
 
-x, y = ecdf(peak_num)
+# x, y = ecdf(peak_num)
 
-peak_fun = interp1d(y, x, fill_value = 'extrapolate')
+# peak_fun = interp1d(y, x, fill_value = 'extrapolate')
 
 def reconstruct_graph_from_netcdf4(path):
     data = xr.load_dataset(path)
