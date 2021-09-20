@@ -31,6 +31,11 @@ host = socket.gethostname()
 temp_folder = r"Z:\users\firo\joblib_tmp"
 temp_folder = None
 
+use_gpu = True
+if use_gpu:
+    import cupy as cp
+else:
+    cp = np
 
 ecdf = robpylib.CommonFunctions.Tools.weighted_ecdf
 
@@ -257,13 +262,16 @@ def calibrate_waiting_time_with_previous_run(waiting_times, old_results, i):
     
 
 def core_simulation(r_i, lengths, adj_matrix, inlets, timesteps, i,  diff_data,sample, R0=1, old_results=None):
-    size = len(r_i)
-
+    size = len(r_i, use_gpu = use_gpu)
+    
     # if len(diff_data)==2:
     #     waiting_times = generate_combined_waiting_times(diff_data, size, peak_fun, i)
     # else:
         # prng = np.random.RandomState(i)
     waiting_times = from_ecdf(diff_data, size, seed=i+1)
+    
+    if use_gpu:
+        waiting_times = cp.array(waiting_times)
         # waiting_times = extend_waiting_time(waiting_times, from_ecdf, peak_fun(prng.rand(size)), diff_data, i)
         # waiting_times = calibrate_waiting_time(waiting_times, pnm.data, seed = i+1000)
         # waiting_times = calibrate_waiting_time_theoretic(waiting_times, r_i, lengths, R0)
@@ -323,8 +331,13 @@ def core_function(samples, timesteps, i,  inlet_count = 2, diff_data=None, old_r
     vx = px**3
     volumes =  vx*data['volume'][:,-10:-1].sel(label = list(graph.nodes())).median(dim='time').data#
     r_i = px*pore_data['value_properties'].sel(property = 'major_axis', label = list(graph.nodes())).data #
-    volumes[volumes==0] = np.median(volumes[volumes>0])
-    lengths = volumes/np.pi/r_i**2
+    
+    if use_gpu:
+        volumes = cp.array(volumes)
+        r_i = cp.array(r_i)
+    
+    volumes[volumes==0] = cp.median(volumes[volumes>0])
+    lengths = volumes/cp.pi/r_i**2
     data.close()
        
     
@@ -334,8 +347,8 @@ def core_function(samples, timesteps, i,  inlet_count = 2, diff_data=None, old_r
     inlets = v_inlets
     sources = inlets
             
-    inlet_radii = np.zeros(len(inlets))
-    inlet_heights = np.zeros(len(inlets))
+    inlet_radii = cp.zeros(len(inlets))
+    inlet_heights = cp.zeros(len(inlets))
    
     # r_i = pnm.radi.copy()
   
@@ -343,22 +356,24 @@ def core_function(samples, timesteps, i,  inlet_count = 2, diff_data=None, old_r
     # lengths = pnm.lengths.copy()
     # r_i = np.sqrt(pnm.volumes.copy()/lengths/np.pi)
     
-    r_i = np.concatenate([r_i, inlet_radii])
-    lengths = np.concatenate([lengths, inlet_heights])
+    r_i = cp.concatenate([r_i, inlet_radii])
+    lengths = cp.concatenate([lengths, inlet_heights])
     
     adj_matrix = nx.to_numpy_array(graph)
+    if use_gpu:
+        adj_matrix = cp.array(adj_matrix)
     result_sim = core_simulation(r_i, lengths, adj_matrix, inlets, timesteps,  i,  diff_data,sample, R0=R0, old_results=old_results)
-    centrality = np.array(list(nx.betweenness_centrality(graph).values()))
-    centrality3 = np.array(list(nx.betweenness_centrality_source(graph, sources=sources2).values()))
-    centrality2 = np.array(list(nx.betweenness_centrality_subset(graph, sources, targets, normalized=True).values()))
-    centrality4 = np.array(list(nx.betweenness_centrality_subset(graph, sources2, targets, normalized=True).values()))
-    centrality5 = np.array(list(nx.betweenness_centrality_source(graph, sources=sources).values()))
+    # centrality = np.array(list(nx.betweenness_centrality(graph).values()))
+    # centrality3 = np.array(list(nx.betweenness_centrality_source(graph, sources=sources2).values()))
+    # centrality2 = np.array(list(nx.betweenness_centrality_subset(graph, sources, targets, normalized=True).values()))
+    # centrality4 = np.array(list(nx.betweenness_centrality_subset(graph, sources2, targets, normalized=True).values()))
+    # centrality5 = np.array(list(nx.betweenness_centrality_source(graph, sources=sources).values()))
     result_sim = result_sim + (sample,)
-    result_sim = result_sim + (centrality5,)
-    result_sim = result_sim + (centrality4,)
-    result_sim = result_sim + (centrality3,)
-    result_sim = result_sim + (centrality2,)
-    result_sim = result_sim + (centrality,)
+    # result_sim = result_sim + (centrality5,)
+    # result_sim = result_sim + (centrality4,)
+    # result_sim = result_sim + (centrality3,)
+    # result_sim = result_sim + (centrality2,)
+    # result_sim = result_sim + (centrality,)
     
     # V0 = result_sim[2]
     time = result_sim[0]
