@@ -54,8 +54,8 @@ def init_K(acts, fills, r_i, K_full, adj_matrix, K, heights):
     
     K_mat = 1/(1/K + 1/K[:,None])
     
-    for i in acts[0]:
-        for j in acts[0]:
+    for i in acts:
+        for j in acts:
             K_mat[i,j] = 0
     
     K_mat = K_mat*(adj_matrix)
@@ -148,7 +148,7 @@ def simulation(r_i, lengths, waiting_times, adj_matrix, inlets,  timesteps, sig_
         A[inlets,:] = 0
         A[inlets,inlets] = 1
             
-        for i in acts[0]:
+        for i in acts:
             A[i,:] = 0
             A[i,i] = 1  
         
