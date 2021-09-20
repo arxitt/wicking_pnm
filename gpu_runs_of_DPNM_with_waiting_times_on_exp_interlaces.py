@@ -362,6 +362,7 @@ def core_function(samples, timesteps, i,  inlet_count = 2, diff_data=None, old_r
     adj_matrix = nx.to_numpy_array(graph)
     if use_gpu:
         adj_matrix = cp.array(adj_matrix)
+    print(adj_matrix)
     result_sim = core_simulation(r_i, lengths, adj_matrix, inlets, timesteps,  i,  diff_data,sample, R0=R0, old_results=old_results)
     # centrality = np.array(list(nx.betweenness_centrality(graph).values()))
     # centrality3 = np.array(list(nx.betweenness_centrality_source(graph, sources=sources2).values()))
