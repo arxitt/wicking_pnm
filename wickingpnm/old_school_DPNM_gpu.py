@@ -97,6 +97,7 @@ def simulation(r_i, lengths, waiting_times, adj_matrix, inlets,  timesteps, sig_
     active[fills] = 0
     heights[fills] = lengths[fills]
     acts = active.nonzero()[0]
+    print(acts)
     V0 = (lengths*cp.pi*r_i**2).sum()
     dt=0.005
     
