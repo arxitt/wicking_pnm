@@ -91,9 +91,9 @@ def simulation(r_i, lengths, waiting_times, adj_matrix, inlets,  timesteps, sig_
     
     filled[inlets] = 1
     # fills = cp.where(filled)
-    fills = filled.nonzero()
+    fills = filled.nonzero()[0]
     # active[cp.unique(cp.where(adj_matrix[fills,:]))]=1
-    active[adj_matrix[fills,:].nonzero()] = 1
+    active[adj_matrix[fills,:].nonzero()[0]] = 1
     active[fills] = 0
     heights[fills] = lengths[fills]
     acts = cp.where(active)
@@ -177,14 +177,14 @@ def simulation(r_i, lengths, waiting_times, adj_matrix, inlets,  timesteps, sig_
         #  allow draining of pores
         # filled[heights<lengths]  = 0
         # fills = cp.where(filled)
-        fills = filled.nonzero()
+        fills = filled.nonzero()[0]
         
         heights[heights<0] = 0
         heights[fills] = lengths[fills]
         
         active[:] = 0
         # active[cp.unique(cp.where(adj_matrix[fills,:]))] = 1
-        active[adj_matrix[fills,:].nonzero()]
+        active[adj_matrix[fills,:].nonzero()[0]]
         active[fills] = 0
         
         new_actives = cp.where((active>0)*~(activation_time>0))
