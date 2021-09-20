@@ -261,8 +261,8 @@ def calibrate_waiting_time_with_previous_run(waiting_times, old_results, i):
     return waiting_times
     
 
-def core_simulation(r_i, lengths, adj_matrix, inlets, timesteps, i,  diff_data,sample, R0=1, old_results=None):
-    size = len(r_i, use_gpu = use_gpu)
+def core_simulation(r_i, lengths, adj_matrix, inlets, timesteps, i,  diff_data,sample, R0=1, old_results=None, use_gpu = use_gpu):
+    size = len(r_i)
     
     # if len(diff_data)==2:
     #     waiting_times = generate_combined_waiting_times(diff_data, size, peak_fun, i)
