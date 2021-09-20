@@ -91,8 +91,9 @@ def simulation(r_i, lengths, waiting_times, adj_matrix, inlets,  timesteps, sig_
     
     filled[inlets] = 1
     fills = cp.where(filled)
-    active[cp.unique(cp.where(adj_matrix[fills,:]))]=1
-    active[fills]=0
+    # active[cp.unique(cp.where(adj_matrix[fills,:]))]=1
+    active[adj_matrix[fills,:].nonzero()] = 1
+    active[fills] = 0
     heights[fills] = lengths[fills]
     acts = cp.where(active)
     V0 = (lengths*cp.pi*r_i**2).sum()
