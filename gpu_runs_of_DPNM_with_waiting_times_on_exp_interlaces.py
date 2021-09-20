@@ -42,6 +42,8 @@ if host == 'mavt-cbp-w001m':
     NASdrive = '/Users/robfisch/NAS'
     # Rdrive =  NASdrive
     njobs = 8
+if host == 'ddm06608':
+    NASdrive = r"V:"
 
 sourceFolder = os.path.join(NASdrive, "Robert_TOMCAT_4_netcdf4_split_v2_no_pore_size_lim")
 dumpfilename = os.path.join(NASdrive,'simulation_dump', 'interlaces_64runs.p')
@@ -397,7 +399,7 @@ not_extreme_samples = ['T4_025_1_III',
 
 # results = []
 for i in range(16):
-    filename = ''.join(['gpu_result_',i,'.p'])
+    filename = ''.join(['gpu_result_',str(i),'.p'])
     result = core_function(not_extreme_samples, timesteps, i+5)
     dumpfile = open(os.path.join(NASdrive,'simulation_dump',filename), 'wb')
     pickle.dump(result, dumpfile)
