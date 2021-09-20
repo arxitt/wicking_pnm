@@ -96,7 +96,7 @@ def simulation(r_i, lengths, waiting_times, adj_matrix, inlets,  timesteps, sig_
     active[adj_matrix[fills,:].nonzero()[0]] = 1
     active[fills] = 0
     heights[fills] = lengths[fills]
-    acts = cp.where(active)
+    acts = active.nonzero()[0]
     V0 = (lengths*cp.pi*r_i**2).sum()
     dt=0.005
     
@@ -114,7 +114,7 @@ def simulation(r_i, lengths, waiting_times, adj_matrix, inlets,  timesteps, sig_
         old_heights = heights.copy()
         
         # select filled sub-network behind the waterfront
-        act_waiting = cp.where(activation_time>time[t-1])
+        act_waiting = cp.where(activation_time>time[t-1])[0]
         mask[:] = 0
         mask[inlets] = 1
         mask[fills] = 1
@@ -124,7 +124,7 @@ def simulation(r_i, lengths, waiting_times, adj_matrix, inlets,  timesteps, sig_
         rest = cp.where(mask==0)[0]
         
         #  fast-foward if there is no active pore
-        if not np.any(mask[acts] > 0):
+        if not cp.any(mask[acts] > 0):
             time[t] = activation_time[activation_time>time[t-1]].min()
             
             V[t] = V[t-1]
@@ -230,7 +230,7 @@ def simulation(r_i, lengths, waiting_times, adj_matrix, inlets,  timesteps, sig_
     #                     activation_time[n] = 150                      
             
                     
-        acts = cp.where(active>0)
+        acts = cp.where(active>0)[0]
         
         # wrap up results
         time[t] = time[t-1] + dt
