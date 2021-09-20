@@ -180,7 +180,8 @@ def simulation(r_i, lengths, waiting_times, adj_matrix, inlets,  timesteps, sig_
         heights[fills] = lengths[fills]
         
         active[:] = 0
-        active[cp.unique(cp.where(adj_matrix[fills,:]))] = 1
+        # active[cp.unique(cp.where(adj_matrix[fills,:]))] = 1
+        active[adj_matrix[fills,:].nonzero()]
         active[fills] = 0
         
         new_actives = cp.where((active>0)*~(activation_time>0))
