@@ -329,7 +329,8 @@ def core_function(samples, timesteps, i,  inlet_count = 2, diff_data=None, old_r
     #     found_inlets.append(pnm.nodes[inlet])
     px = 2.75E-6
     vx = px**3
-    volumes =  vx*data['volume'][:,-10:-1].sel(label = list(graph.nodes())).median(dim='time').data#
+    # volumes =  vx*data['volume'][:,-10:-1].sel(label = list(graph.nodes())).median(dim='time').data#
+    volumes = vx*pore_data['value_properties'].sel(property = 'volume', label = list(graph.nodes())).data
     r_i = px*pore_data['value_properties'].sel(property = 'major_axis', label = list(graph.nodes())).data #
     
     if use_gpu:
@@ -414,7 +415,7 @@ not_extreme_samples = ['T4_025_1_III',
 # results = Parallel(n_jobs=njobs, temp_folder=temp_folder)(delayed(core_function)(not_extreme_samples, timesteps, i+5) for i in range(64))  
 
 # results = []
-for i in range(16):
+for i in range(4):
     filename = ''.join(['gpu_result_',str(i),'.p'])
     result = core_function(not_extreme_samples, timesteps, i+5)
     dumpfile = open(os.path.join(NASdrive,'simulation_dump',filename), 'wb')
