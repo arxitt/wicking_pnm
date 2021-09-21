@@ -45,6 +45,20 @@ def timestep(q_i, r_i, h, l, dxmax = 0.5E-4):
     dt = (dxmax*cp.pi*r_i[q_i>0]**2/(q_i[q_i>0])).min()
     dt = max((dt,0.005))
     return dt
+
+def get_time_step(qi, Vi, ds = 0.1):
+    # set time step such that the saturation change in no pore is larger than ds 
+    dsdt = qi/Vi
+    if cp.any(dsdt>0):
+        dt = (ds/dsdt[dsdt>0]).min()
+        if dt < 1E-12:
+            dt = 1E-12
+    else:
+        dt = 0
+
+    dsdt = dt*dsdt
+    qi = dsdt*Vi
+    return dt, dsdt, qi
      
 def init_K(acts, fills, r_i, K_full, adj_matrix, K, heights):
     # K = K_full.copy()
@@ -64,7 +78,7 @@ def init_K(acts, fills, r_i, K_full, adj_matrix, K, heights):
 # create network
 
 def simulation(r_i, lengths, waiting_times, adj_matrix, inlets,  timesteps, sig_diffs = None, node_dict = None, patm = patm, eta = eta, gamma = gamma, cos = cos, R0 = R0, pnm=None, sample=None, tlim=1E16):
-    
+    print('inlets', inlets)
     size = adj_matrix.shape[0]
     
     # initialize arrays
@@ -92,17 +106,21 @@ def simulation(r_i, lengths, waiting_times, adj_matrix, inlets,  timesteps, sig_
     filled[inlets] = 1
     # fills = cp.where(filled)
     fills = filled.nonzero()[0]
+    
     # active[cp.unique(cp.where(adj_matrix[fills,:]))]=1
-    active[adj_matrix[fills,:].nonzero()[0]] = 1
+    active[adj_matrix[:,fills].nonzero()[0]] = 1
     active[fills] = 0
     heights[fills] = lengths[fills]
     acts = active.nonzero()[0]
-    print(acts)
-    V0 = (lengths*cp.pi*r_i**2).sum()
+    
+    Vi = lengths*cp.pi*r_i**2
+    V0 = Vi.sum()
     dt=0.005
     
     # run simulation
     for t in range(timesteps):
+        # print('fills',fills)
+        # print('acts',acts)
         # flag = False
         # if t % 5000 == 0: flag=True
         # let loop roll off if full saturation is reached
@@ -112,7 +130,7 @@ def simulation(r_i, lengths, waiting_times, adj_matrix, inlets,  timesteps, sig_
             continue
         
        
-        old_heights = heights.copy()
+        # old_heights = heights.copy()
         
         # select filled sub-network behind the waterfront
         act_waiting = cp.where(activation_time>time[t-1])[0]
@@ -163,14 +181,18 @@ def simulation(r_i, lengths, waiting_times, adj_matrix, inlets,  timesteps, sig_
        # get pore fluxes
         q_ij = K_mat*p_mat
         q_i = q_ij.sum(axis=0)
+        # print('q',q_i[acts])
     
        # get new time stepping
         if cp.any(q_i>0):
-            dt = 1.0001*timestep(q_i, r_i, old_heights[acts], lengths[acts])
+            # dt = 1.0001*timestep(q_i, r_i, old_heights[acts], lengths[acts])
+            dt, dsdt, qi = get_time_step(q_i, Vi)
+            
 
         
     #  update pore filling states
-        heights = heights + dt*q_i/cp.pi/r_i**2
+        # heights = heights + dt*q_i/cp.pi/r_i**2
+        heights = heights + dsdt*lengths
         # heights[acts] = heights[acts] + dt*q_i[acts]/np.pi/r_i[acts]**2
         old_filled = filled.copy()
         filled[heights>=lengths] = 1
@@ -185,7 +207,7 @@ def simulation(r_i, lengths, waiting_times, adj_matrix, inlets,  timesteps, sig_
         
         active[:] = 0
         # active[cp.unique(cp.where(adj_matrix[fills,:]))] = 1
-        active[adj_matrix[fills,:].nonzero()[0]]
+        active[adj_matrix[:,fills].nonzero()[0]] = 1
         active[fills] = 0
         
         new_actives = cp.where((active>0)*~(activation_time>0))

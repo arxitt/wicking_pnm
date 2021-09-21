@@ -292,6 +292,8 @@ def core_simulation(r_i, lengths, adj_matrix, inlets, timesteps, i,  diff_data,s
 def core_function(samples, timesteps, i,  inlet_count = 2, diff_data=None, old_results=None):
     prng3 = np.random.RandomState(i)
     sample = prng3.choice(samples)
+    sample = "T4_025_1_III"
+    print(sample)
 
     netpath = os.path.join(sourceFolder, ''.join(['network_',sample,'.nc']))
     graph = reconstruct_graph_from_netcdf4(netpath)
@@ -304,20 +306,21 @@ def core_function(samples, timesteps, i,  inlet_count = 2, diff_data=None, old_r
     pore_data = xr.load_dataset(os.path.join(sourceFolder, ''.join(['pore_props_',sample,'.nc'])))
     
     # check waht is actually bottom and top
-    sourcesraw = np.unique(data['label_matrix'][:,:,0])[1:]
-    targetsraw = np.unique(data['label_matrix'][:,:,-1])[1:]
+    sourcesraw = np.unique(data['label_matrix'][:,:,-10:-1])[1:]
+    # targetsraw = np.unique(data['label_matrix'][:,:,-1])[1:]
 
     
     sources = []
-    targets = []
+    # targets = []
     for k in sourcesraw:
         if k in graph.nodes():
             sources.append(k)
-    for k in targetsraw:
-        if k in graph.nodes():
-            targets.append(k)
-    sources2 = sources.copy()
+    # for k in targetsraw:
+    #     if k in graph.nodes():
+    #         targets.append(k)
+    # sources2 = sources.copy()
     inlets = sources.copy()  
+    # print('inlets', inlets)
     # prng7 = np.random.RandomState(i+3)
     # # inlets = prng7.choice(sources, 2)
     # sources = prng7.choice(sources, 4)
@@ -331,22 +334,28 @@ def core_function(samples, timesteps, i,  inlet_count = 2, diff_data=None, old_r
     vx = px**3
     # volumes =  vx*data['volume'][:,-10:-1].sel(label = list(graph.nodes())).median(dim='time').data#
     volumes = vx*pore_data['value_properties'].sel(property = 'volume', label = list(graph.nodes())).data
-    r_i = px*pore_data['value_properties'].sel(property = 'major_axis', label = list(graph.nodes())).data #
+    lengths = px*pore_data['value_properties'].sel(property = 'arc_length', label = list(graph.nodes())).data #
     
     if use_gpu:
         volumes = cp.array(volumes)
-        r_i = cp.array(r_i)
+        lengths = cp.array(lengths)
     
-    volumes[volumes==0] = cp.median(volumes[volumes>0])
-    lengths = volumes/cp.pi/r_i**2
+    lengths[lengths<1E-8] = px
+    volumes[volumes==0] = vx
+    r_i = cp.sqrt(volumes/cp.pi/lengths)
     data.close()
-       
+    
+    # print(lengths[lengths<1E-8])
+    # print(r_i[r_i>1])
+    # print(volumes[lengths<1E-8])
     
     v_inlets = -1*(np.arange(len(inlets))+1)
     for k in range(len(inlets)):
         graph.add_edge(inlets[k], v_inlets[k])
     inlets = v_inlets
-    sources = inlets
+    # print(graph.nodes())
+    # sources = inlets
+    # print(inlets)
             
     inlet_radii = cp.zeros(len(inlets))
     inlet_heights = cp.zeros(len(inlets))
@@ -361,6 +370,7 @@ def core_function(samples, timesteps, i,  inlet_count = 2, diff_data=None, old_r
     lengths = cp.concatenate([lengths, inlet_heights])
     
     adj_matrix = nx.to_numpy_array(graph)
+    # print(adj_matrix.shape)
     if use_gpu:
         adj_matrix = cp.array(adj_matrix)
     # print(adj_matrix)
@@ -392,7 +402,7 @@ def core_function(samples, timesteps, i,  inlet_count = 2, diff_data=None, old_r
 print('Warning: Inlet resistance hard-coded')
 # print('Warning peak number hard-coded to 1')
 
-timesteps = 20#000000#0#0#0
+timesteps = 40000#♣00#0#0#0
 
 # multi-sample run
 not_extreme_samples = ['T4_025_1_III',
@@ -415,9 +425,9 @@ not_extreme_samples = ['T4_025_1_III',
 # results = Parallel(n_jobs=njobs, temp_folder=temp_folder)(delayed(core_function)(not_extreme_samples, timesteps, i+5) for i in range(64))  
 
 # results = []
-for i in range(4):
+for i in range(1):
     filename = ''.join(['gpu_result_',str(i),'.p'])
-    result = core_function(not_extreme_samples, timesteps, i+5)
+    result = core_function(not_extreme_samples, timesteps, i+5+5)
     dumpfile = open(os.path.join(NASdrive,'simulation_dump',filename), 'wb')
     pickle.dump(result, dumpfile)
     dumpfile.close()
