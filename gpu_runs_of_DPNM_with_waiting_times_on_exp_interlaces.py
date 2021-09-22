@@ -280,6 +280,16 @@ def core_simulation(r_i, lengths, adj_matrix, inlets, timesteps, i,  diff_data,s
     #  pass the pnm with the experimental activation time in the case of running the validation samples
     # time, V, V0, activation_time, filling_time = simulation(r_i, lengths, waiting_times, adj_matrix, inlets, timesteps, node_dict = pnm.label_dict, pnm = pnm, R0=R0,sample=pnm.sample)
     time, V, V0, activation_time, filling_time = simulation(r_i, lengths, waiting_times, adj_matrix, inlets, timesteps,  R0=R0,sample=sample)
+    
+    if use_gpu:
+        time = cp.asnumpy(time)
+        V = cp.asnumpy(V)
+        V0 = cp.asnumpy(V0)
+        activation_time = cp.asnumpy(activation_time)
+        filling_time = cp.asnumpy(filling_time)
+        waiting_times = cp.asnumpy(waiting_times)
+    
+    
     V_fun = interp1d(time, V, fill_value = 'extrapolate')
     
     new_time = np.arange(0,1000,0.5)
@@ -402,7 +412,7 @@ def core_function(samples, timesteps, i,  inlet_count = 2, diff_data=None, old_r
 print('Warning: Inlet resistance hard-coded')
 # print('Warning peak number hard-coded to 1')
 
-timesteps = 40000#♣00#0#0#0
+timesteps = 4#0000#♣00#0#0#0
 
 # multi-sample run
 not_extreme_samples = ['T4_025_1_III',
