@@ -412,7 +412,7 @@ def core_function(samples, timesteps, i,  inlet_count = 2, diff_data=None, old_r
 print('Warning: Inlet resistance hard-coded')
 # print('Warning peak number hard-coded to 1')
 
-timesteps = 4#0000#♣00#0#0#0
+timesteps = 400000#0#0#0
 
 # multi-sample run
 not_extreme_samples = ['T4_025_1_III',
